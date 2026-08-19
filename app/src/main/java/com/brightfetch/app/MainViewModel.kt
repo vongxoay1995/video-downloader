@@ -1,0 +1,308 @@
+package com.brightfetch.app
+
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import com.brightfetch.app.download.DownloadContract
+import com.brightfetch.app.download.DownloadScheduler
+import com.brightfetch.app.browser.TikTokPageResolver
+import com.brightfetch.app.browser.MediaUrlClassifier
+import com.brightfetch.app.browser.News24hPageResolver
+import com.brightfetch.app.browser.Kenh14PageResolver
+import com.brightfetch.app.browser.MediaPageIdentity
+import com.brightfetch.app.model.DownloadSnapshot
+import com.brightfetch.app.model.DownloadedVideo
+import com.brightfetch.app.model.MediaCandidate
+import com.brightfetch.app.storage.PublicVideoStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+class MainViewModel(application: Application) : AndroidViewModel(application) {
+    private val workManager = WorkManager.getInstance(application)
+
+    private val _candidates = MutableStateFlow<List<MediaCandidate>>(emptyList())
+    val candidates: StateFlow<List<MediaCandidate>> = _candidates.asStateFlow()
+
+    private val _isResolvingPage = MutableStateFlow(false)
+    val isResolvingPage: StateFlow<Boolean> = _isResolvingPage.asStateFlow()
+
+    private var pageResolverJob: Job? = null
+    private var resolvingPageUrl: String? = null
+    private var resolverGeneration = 0L
+    private var resolvedTikTokVideoId: String? = null
+    private var resolvedPreferredPageKey: String? = null
+
+    private val _downloads = MutableStateFlow<List<DownloadSnapshot>>(emptyList())
+    val downloads: StateFlow<List<DownloadSnapshot>> = _downloads.asStateFlow()
+
+    private val _videos = MutableStateFlow<List<DownloadedVideo>>(emptyList())
+    val videos: StateFlow<List<DownloadedVideo>> = _videos.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                PublicVideoStore.migrateLegacyFiles(application)
+            }
+            while (isActive) {
+                refreshDownloads()
+                refreshVideos()
+                delay(750)
+            }
+        }
+    }
+
+    fun addCandidate(candidate: MediaCandidate) {
+        if (MediaUrlClassifier.isLikelyAudio(candidate.url)) return
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                MEDIA_LOG_TAG,
+                "Detected video URL: ${candidate.url} | page=${candidate.pageUrl} | mime=${candidate.mimeType}",
+            )
+        }
+        _candidates.update { current ->
+            if (current.any { it.url == candidate.url }) return@update current
+
+            val candidatePageKey = MediaPageIdentity.key(candidate.pageUrl)
+            if (candidatePageKey != null && candidatePageKey == resolvedPreferredPageKey) {
+                return@update current
+            }
+
+            val videoId = TikTokPageResolver.videoPageId(candidate.pageUrl)
+            if (videoId != null && videoId == resolvedTikTokVideoId) {
+                // The native page resolver has already selected this post's canonical playAddr.
+                return@update current
+            }
+
+            if (videoId != null) {
+                val existingIndex = current.indexOfFirst {
+                    TikTokPageResolver.videoPageId(it.pageUrl) == videoId
+                }
+                if (existingIndex >= 0) {
+                    val existing = current[existingIndex]
+                    if (tiktokCandidateScore(candidate) <= tiktokCandidateScore(existing)) {
+                        return@update current
+                    }
+                    return@update current.toMutableList().apply { this[existingIndex] = candidate }
+                }
+            }
+            (listOf(candidate) + current).take(20)
+        }
+    }
+
+    fun clearCandidates() {
+        resolverGeneration += 1
+        pageResolverJob?.cancel()
+        pageResolverJob = null
+        resolvingPageUrl = null
+        resolvedTikTokVideoId = null
+        resolvedPreferredPageKey = null
+        _isResolvingPage.value = false
+        _candidates.value = emptyList()
+    }
+
+    fun resolveKnownPage(
+        pageUrl: String,
+        pageTitle: String,
+        userAgent: String?,
+        cookie: String?,
+    ) {
+        val isTikTokPage = TikTokPageResolver.supports(pageUrl)
+        val isNews24hPage = News24hPageResolver.supports(pageUrl)
+        val isKenh14Page = Kenh14PageResolver.supports(pageUrl)
+        if (!isTikTokPage && !isNews24hPage && !isKenh14Page) return
+        if (pageResolverJob?.isActive == true && resolvingPageUrl == pageUrl) return
+
+        pageResolverJob?.cancel()
+        val generation = ++resolverGeneration
+        resolvingPageUrl = pageUrl
+        _isResolvingPage.value = true
+        pageResolverJob = viewModelScope.launch {
+            try {
+                val resolvedCandidate = withContext(Dispatchers.IO) {
+                    when {
+                        isTikTokPage -> TikTokPageResolver.resolve(pageUrl, userAgent, cookie)?.let { resolved ->
+                            ResolvedCandidate(
+                                candidate = MediaCandidate(
+                                    url = resolved.mediaUrl,
+                                    title = resolvedTitle(pageTitle, resolved.pageUrl),
+                                    pageUrl = resolved.pageUrl,
+                                    mimeType = resolved.mimeType ?: "video/mp4",
+                                    userAgent = userAgent,
+                                    cookie = resolved.cookie,
+                                    width = resolved.width,
+                                    height = resolved.height,
+                                    durationSeconds = resolved.durationSeconds,
+                                    contentLengthBytes = resolved.contentLengthBytes,
+                                    preferredFileName = resolvedTitle(pageTitle, resolved.pageUrl),
+                                ),
+                                preferredTikTokVideoId = TikTokPageResolver.videoPageId(resolved.pageUrl),
+                            )
+                        }
+                        isNews24hPage -> News24hPageResolver.resolve(pageUrl, userAgent, cookie)?.let { resolved ->
+                            ResolvedCandidate(
+                                candidate = MediaCandidate(
+                                    url = resolved.mediaUrl,
+                                    title = resolved.title ?: pageTitle,
+                                    pageUrl = resolved.pageUrl,
+                                    mimeType = resolved.mimeType,
+                                    userAgent = userAgent,
+                                    cookie = resolved.cookie,
+                                    preferredFileName = resolved.title ?: pageTitle,
+                                ),
+                            )
+                        }
+                        else -> Kenh14PageResolver.resolve(pageUrl, userAgent, cookie)?.let { resolved ->
+                            ResolvedCandidate(
+                                candidate = MediaCandidate(
+                                    url = resolved.mediaUrl,
+                                    title = resolved.title,
+                                    pageUrl = resolved.pageUrl,
+                                    mimeType = resolved.mimeType,
+                                    userAgent = userAgent,
+                                    cookie = resolved.cookie,
+                                    contentLengthBytes = resolved.contentLengthBytes,
+                                    preferredFileName = resolved.title,
+                                ),
+                            )
+                        }
+                    }
+                }
+                resolvedCandidate?.let { resolved ->
+                    currentCoroutineContext().ensureActive()
+                    if (resolverGeneration != generation) return@let
+                    if (resolved.preferredTikTokVideoId != null) {
+                        addResolvedTikTokCandidate(resolved.candidate, resolved.preferredTikTokVideoId)
+                    } else {
+                        addResolvedPageCandidate(resolved.candidate)
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (BuildConfig.DEBUG) Log.w(MEDIA_LOG_TAG, "Page video extraction failed: $pageUrl", error)
+            } finally {
+                if (resolverGeneration == generation) {
+                    _isResolvingPage.value = false
+                    resolvingPageUrl = null
+                    pageResolverJob = null
+                }
+            }
+        }
+    }
+
+    private data class ResolvedCandidate(
+        val candidate: MediaCandidate,
+        val preferredTikTokVideoId: String? = null,
+    )
+
+    private fun addResolvedTikTokCandidate(candidate: MediaCandidate, videoId: String?) {
+        if (videoId == null) {
+            addCandidate(candidate)
+            return
+        }
+        resolvedTikTokVideoId = videoId
+        if (BuildConfig.DEBUG) {
+            Log.d(MEDIA_LOG_TAG, "Selected TikTok playAddr: ${candidate.url} | video=$videoId")
+        }
+        addResolvedPageCandidate(candidate) { existing ->
+            TikTokPageResolver.videoPageId(existing.pageUrl) == videoId
+        }
+    }
+
+    private fun addResolvedPageCandidate(
+        candidate: MediaCandidate,
+        additionalMatch: (MediaCandidate) -> Boolean = { false },
+    ) {
+        val key = MediaPageIdentity.key(candidate.pageUrl)
+        resolvedPreferredPageKey = key
+        _candidates.update { current ->
+            listOf(candidate) + current.filterNot { existing ->
+                existing.url == candidate.url ||
+                    (key != null && MediaPageIdentity.key(existing.pageUrl) == key) ||
+                    additionalMatch(existing)
+            }
+        }
+    }
+
+    private fun tiktokCandidateScore(candidate: MediaCandidate): Int {
+        if (MediaUrlClassifier.isLikelyAudio(candidate.url)) return Int.MIN_VALUE
+        val normalized = candidate.url.lowercase()
+        var score = 0
+        if ("/video/tos/" in normalized) score += 20
+        if ("mime_type=video" in normalized || candidate.mimeType?.startsWith("video/") == true) score += 20
+        if ("webapp-prime" in normalized) score += 20
+        else if ("webapp" in normalized) score += 10
+        return score
+    }
+
+    private fun resolvedTitle(pageTitle: String, pageUrl: String): String {
+        val usefulPageTitle = pageTitle.takeIf {
+            it.isNotBlank() &&
+                !it.equals("BrightFetch", ignoreCase = true) &&
+                !it.equals("Detected video", ignoreCase = true)
+        }
+        if (usefulPageTitle != null) return usefulPageTitle
+        val videoId = Regex("/video/(\\d+)").find(pageUrl)?.groupValues?.getOrNull(1)
+        return videoId?.let { "TikTok_$it" } ?: "TikTok video"
+    }
+
+    fun enqueue(candidate: MediaCandidate) {
+        DownloadScheduler.enqueue(getApplication(), candidate)
+    }
+
+    fun cancel(id: java.util.UUID) {
+        workManager.cancelWorkById(id)
+    }
+
+    fun deleteVideo(video: DownloadedVideo) {
+        viewModelScope.launch(Dispatchers.IO) {
+            PublicVideoStore.delete(getApplication(), video)
+            refreshVideos()
+        }
+    }
+
+    private suspend fun refreshDownloads() = withContext(Dispatchers.IO) {
+        val infos = runCatching {
+            workManager.getWorkInfosByTag(DownloadContract.TAG).get()
+        }.getOrDefault(emptyList())
+        _downloads.value = infos
+            .sortedBy { info -> if (info.state == WorkInfo.State.RUNNING || info.state == WorkInfo.State.ENQUEUED) 0 else 1 }
+            .map { info ->
+                DownloadSnapshot(
+                    id = info.id,
+                    fileName = info.tags.firstOrNull { it.startsWith(DownloadContract.TAG_NAME_PREFIX) }
+                        ?.removePrefix(DownloadContract.TAG_NAME_PREFIX)
+                        .orEmpty(),
+                    url = "",
+                    state = info.state,
+                    progress = info.progress.getInt(DownloadContract.KEY_PROGRESS, if (info.state == WorkInfo.State.SUCCEEDED) 100 else 0),
+                    downloadedBytes = info.progress.getLong(DownloadContract.KEY_DOWNLOADED, 0L),
+                    totalBytes = info.progress.getLong(DownloadContract.KEY_TOTAL, 0L),
+                    error = info.outputData.getString(DownloadContract.KEY_ERROR),
+                    outputPath = info.outputData.getString(DownloadContract.KEY_OUTPUT_PATH),
+                )
+            }
+    }
+
+    private suspend fun refreshVideos() = withContext(Dispatchers.IO) {
+        _videos.value = PublicVideoStore.query(getApplication())
+    }
+
+    private companion object {
+        const val MEDIA_LOG_TAG = "BrightFetchMedia"
+    }
+}
