@@ -49,19 +49,20 @@ object PublicVideoStore {
 
     fun query(context: Context): List<DownloadedVideo> {
         val resolver = context.contentResolver
-        val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        val collection = videoCollection()
+        val isModernStorage = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
         val projection = buildList {
             add(MediaStore.Video.Media._ID)
             add(MediaStore.Video.Media.DISPLAY_NAME)
             add(MediaStore.Video.Media.SIZE)
             add(MediaStore.Video.Media.DATE_MODIFIED)
             add(MediaStore.Video.Media.MIME_TYPE)
-            add(MediaStore.Video.Media.DATA)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) add(MediaStore.Video.Media.RELATIVE_PATH)
+            if (isModernStorage) add(MediaStore.Video.Media.RELATIVE_PATH)
+            else add(MediaStore.Video.Media.DATA)
         }.toTypedArray()
         val selection: String
         val args: Array<String>
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (isModernStorage) {
             selection = "${MediaStore.Video.Media.RELATIVE_PATH}=?"
             args = arrayOf(RELATIVE_DIRECTORY)
         } else {
@@ -84,13 +85,30 @@ object PublicVideoStore {
                 val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
                 val modifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_MODIFIED)
                 val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE)
-                val pathColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
+                val relativePathColumn = if (isModernStorage) {
+                    cursor.getColumnIndexOrThrow(MediaStore.Video.Media.RELATIVE_PATH)
+                } else {
+                    -1
+                }
+                val legacyPathColumn = if (isModernStorage) {
+                    -1
+                } else {
+                    cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
+                }
                 buildList {
                     while (cursor.moveToNext()) {
                         val name = cursor.getString(nameColumn).orEmpty()
                         if (!VideoFileNames.hasSupportedExtension(name)) continue
                         val id = cursor.getLong(idColumn)
-                        val storedPath = cursor.getString(pathColumn).orEmpty()
+                        val displayPath = if (isModernStorage) {
+                            val relativePath = cursor.getString(relativePathColumn)
+                                .orEmpty()
+                                .ifBlank { RELATIVE_DIRECTORY }
+                                .trimStart('/')
+                            "/storage/emulated/0/$relativePath$name"
+                        } else {
+                            cursor.getString(legacyPathColumn).orEmpty()
+                        }
                         add(
                             DownloadedVideo(
                                 uri = ContentUris.withAppendedId(collection, id),
@@ -99,7 +117,7 @@ object PublicVideoStore {
                                 modifiedAt = cursor.getLong(modifiedColumn) * 1_000L,
                                 mimeType = cursor.getString(mimeColumn)
                                     ?: VideoFileNames.mimeTypeFor(name),
-                                displayPath = storedPath.ifBlank {
+                                displayPath = displayPath.ifBlank {
                                     "/storage/emulated/0/$RELATIVE_DIRECTORY$name"
                                 },
                             )
@@ -149,13 +167,15 @@ object PublicVideoStore {
         val resolver = context.contentResolver
         val collection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val finalName = uniqueMediaStoreName(context, requestedName)
-        val nowSeconds = System.currentTimeMillis() / 1_000L
+        val nowMillis = System.currentTimeMillis()
+        val nowSeconds = nowMillis / 1_000L
         val values = ContentValues().apply {
             put(MediaStore.Video.Media.DISPLAY_NAME, finalName)
             put(MediaStore.Video.Media.MIME_TYPE, mimeType)
             put(MediaStore.Video.Media.RELATIVE_PATH, RELATIVE_DIRECTORY)
             put(MediaStore.Video.Media.DATE_ADDED, nowSeconds)
             put(MediaStore.Video.Media.DATE_MODIFIED, nowSeconds)
+            put(MediaStore.Video.Media.DATE_TAKEN, nowMillis)
             put(MediaStore.Video.Media.IS_PENDING, 1)
         }
         val uri = resolver.insert(collection, values)
@@ -227,19 +247,36 @@ object PublicVideoStore {
         fallbackMimeType: String,
         fallbackSize: Long,
     ): PublishedVideo {
-        val projection = arrayOf(
-            MediaStore.Video.Media.DISPLAY_NAME,
-            MediaStore.Video.Media.DATA,
-            MediaStore.Video.Media.SIZE,
-            MediaStore.Video.Media.MIME_TYPE,
-        )
+        val isModernStorage = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+        val projection = if (isModernStorage) {
+            arrayOf(
+                MediaStore.Video.Media.DISPLAY_NAME,
+                MediaStore.Video.Media.RELATIVE_PATH,
+                MediaStore.Video.Media.SIZE,
+                MediaStore.Video.Media.MIME_TYPE,
+            )
+        } else {
+            arrayOf(
+                MediaStore.Video.Media.DISPLAY_NAME,
+                MediaStore.Video.Media.DATA,
+                MediaStore.Video.Media.SIZE,
+                MediaStore.Video.Media.MIME_TYPE,
+            )
+        }
         return runCatching {
             context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
                 if (!cursor.moveToFirst()) return@use null
                 val name = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME))
                     .orEmpty().ifBlank { fallbackName }
-                val path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA))
-                    .orEmpty().ifBlank { "/storage/emulated/0/$RELATIVE_DIRECTORY$name" }
+                val path = if (isModernStorage) {
+                    val relativePath = cursor.getString(
+                        cursor.getColumnIndexOrThrow(MediaStore.Video.Media.RELATIVE_PATH),
+                    ).orEmpty().ifBlank { RELATIVE_DIRECTORY }.trimStart('/')
+                    "/storage/emulated/0/$relativePath$name"
+                } else {
+                    cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA))
+                        .orEmpty().ifBlank { "/storage/emulated/0/$RELATIVE_DIRECTORY$name" }
+                }
                 val size = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE))
                     .takeIf { it > 0L } ?: fallbackSize
                 val storedMime = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE))
@@ -278,4 +315,10 @@ object PublicVideoStore {
     }
 
     private const val BUFFER_SIZE = 64 * 1024
+
+    private fun videoCollection(): Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+    } else {
+        MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+    }
 }
