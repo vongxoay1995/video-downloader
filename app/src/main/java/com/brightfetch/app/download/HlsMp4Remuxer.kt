@@ -59,12 +59,19 @@ internal object HlsMp4Remuxer {
                 extractor.selectTrack(sourceTrack)
                 sourceTrack to activeMuxer.addTrack(format)
             }
+            val fallbackStepsUs = LongArray(extractor.trackCount) { 1L }
+            selectedTracks.forEach { (sourceTrack, format) ->
+                fallbackStepsUs[sourceTrack] = format.fallbackSampleStepUs()
+            }
+            val timestampNormalizer = HlsTimestampNormalizer(
+                trackCount = extractor.trackCount,
+                fallbackStepsUs = fallbackStepsUs,
+            )
             activeMuxer.start()
             muxerStarted = true
 
             var buffer = ByteBuffer.allocateDirect(DEFAULT_SAMPLE_BUFFER_BYTES)
             val info = MediaCodec.BufferInfo()
-            val lastPresentationTimes = LongArray(extractor.trackCount) { Long.MIN_VALUE }
             while (true) {
                 currentCoroutineContext().ensureActive()
                 val sourceTrack = extractor.sampleTrackIndex
@@ -82,11 +89,10 @@ internal object HlsMp4Remuxer {
                 val size = extractor.readSampleData(buffer, 0)
                 if (size < 0) break
                 if (size > buffer.capacity()) throw HlsRemuxException("HLS sample exceeds remux buffer")
-                val presentationTimeUs = extractor.sampleTime
-                if (presentationTimeUs < 0L || presentationTimeUs < lastPresentationTimes[sourceTrack]) {
-                    throw HlsRemuxException("HLS timestamps are discontinuous")
-                }
-                lastPresentationTimes[sourceTrack] = presentationTimeUs
+                val presentationTimeUs = timestampNormalizer.normalize(
+                    trackIndex = sourceTrack,
+                    rawTimestampUs = extractor.sampleTime,
+                )
                 val flags = if (extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) {
                     MediaCodec.BUFFER_FLAG_KEY_FRAME
                 } else {
@@ -115,7 +121,33 @@ internal object HlsMp4Remuxer {
         getString(MediaFormat.KEY_MIME)
     }.getOrNull()
 
+    private fun MediaFormat.fallbackSampleStepUs(): Long {
+        val mimeType = mimeType().orEmpty()
+        return when {
+            mimeType.startsWith("video/") -> {
+                val frameRate = integerOrNull(MediaFormat.KEY_FRAME_RATE)?.takeIf { it > 0 }
+                frameRate?.let { MICROS_PER_SECOND / it } ?: DEFAULT_VIDEO_SAMPLE_STEP_US
+            }
+
+            mimeType.startsWith("audio/") -> {
+                val sampleRate = integerOrNull(MediaFormat.KEY_SAMPLE_RATE)?.takeIf { it > 0 }
+                sampleRate?.let { AAC_SAMPLES_PER_FRAME * MICROS_PER_SECOND / it }
+                    ?: DEFAULT_AUDIO_SAMPLE_STEP_US
+            }
+
+            else -> 1L
+        }
+    }
+
+    private fun MediaFormat.integerOrNull(key: String): Int? = runCatching {
+        getInteger(key)
+    }.getOrNull()
+
     class HlsRemuxException(message: String) : Exception(message)
 
     private const val DEFAULT_SAMPLE_BUFFER_BYTES = 8 * 1024 * 1024
+    private const val MICROS_PER_SECOND = 1_000_000L
+    private const val AAC_SAMPLES_PER_FRAME = 1_024L
+    private const val DEFAULT_VIDEO_SAMPLE_STEP_US = 33_333L
+    private const val DEFAULT_AUDIO_SAMPLE_STEP_US = 23_220L
 }
