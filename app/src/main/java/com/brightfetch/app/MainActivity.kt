@@ -86,9 +86,7 @@ private fun BrightFetchApp(mainViewModel: MainViewModel = viewModel()) {
 
     DisposableEffect(browserState) {
         onDispose {
-            browserState.webView?.destroy()
-            browserState.webView = null
-            browserState.mediaReporter = null
+            browserState.dispose()
         }
     }
 

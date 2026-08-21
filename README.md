@@ -5,12 +5,16 @@ BrightFetch is an Android video-downloader MVP built with Kotlin, Jetpack Compos
 ## Included
 
 - Browser home inspired by the provided reference: address bar, quick actions, disclaimer, and search-engine shortcuts.
+- Real multi-tab browsing with a tab switcher, independent page/navigation state, safe close behavior, and background WebView pausing.
+- Persistent browsing history and bookmarks, including reopen, remove, and clear actions.
+- Persistent browser settings for Google, DuckDuckGo, Bing, or Yahoo search; JavaScript; cookies; and desktop-site mode.
+- Browser page actions for refresh/stop, bookmark, share, copy URL, and opening the page in another browser.
 - Bottom navigation with Home, Downloading, and Videos tabs.
 - Thread-safe WebView media sniffing from network requests, download callbacks, dynamic HTML `video`/`source` elements, performance entries, and embedded media JSON.
 - Recognition of signed CDN media URLs without file extensions (including common public TikTok CDN URL shapes).
 - Direct TikTok share-page resolution: pasting a public TikTok link extracts its signed `playAddr` and preserves the matching session cookies required by the CDN.
 - TikTok candidates show the MP4 suffix, vertical resolution, duration, and exact file size from a one-byte CDN metadata probe before download.
-- Google is the default address-bar search engine; 24h article pages resolve the real HLS manifest hidden behind their blob-based player.
+- Google is the default address-bar search engine; the selected engine is remembered. 24h article pages resolve the real HLS manifest hidden behind their blob-based player.
 - Kênh14 article pages prefer the original `data-vid` MP4 and use the article headline as the saved file name instead of internal CDN identifiers.
 - Direct HTTP(S) video downloads with foreground notifications, progress, cancellation, and Range-based resume.
 - VOD HLS (`.m3u8`) downloads with automatic selection of the highest-bandwidth variant, including standard AES-128 playlists with a publicly accessible key.

@@ -9,6 +9,11 @@ import androidx.work.WorkManager
 import com.brightfetch.app.download.DownloadContract
 import com.brightfetch.app.download.DownloadScheduler
 import com.brightfetch.app.browser.TikTokPageResolver
+import com.brightfetch.app.browser.BrowserBookmark
+import com.brightfetch.app.browser.BrowserHistoryEntry
+import com.brightfetch.app.browser.BrowserRepository
+import com.brightfetch.app.browser.BrowserSearchEngine
+import com.brightfetch.app.browser.BrowserSettings
 import com.brightfetch.app.browser.MediaUrlClassifier
 import com.brightfetch.app.browser.News24hPageResolver
 import com.brightfetch.app.browser.Kenh14PageResolver
@@ -33,6 +38,11 @@ import kotlinx.coroutines.withContext
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val workManager = WorkManager.getInstance(application)
+    private val browserRepository = BrowserRepository(application)
+
+    val browserHistory: StateFlow<List<BrowserHistoryEntry>> = browserRepository.history
+    val browserBookmarks: StateFlow<List<BrowserBookmark>> = browserRepository.bookmarks
+    val browserSettings: StateFlow<BrowserSettings> = browserRepository.settings
 
     private val _candidates = MutableStateFlow<List<MediaCandidate>>(emptyList())
     val candidates: StateFlow<List<MediaCandidate>> = _candidates.asStateFlow()
@@ -262,6 +272,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun enqueue(candidate: MediaCandidate) {
         DownloadScheduler.enqueue(getApplication(), candidate)
+    }
+
+    fun recordBrowserVisit(url: String, title: String) {
+        browserRepository.recordVisit(url, title)
+    }
+
+    fun toggleBrowserBookmark(url: String, title: String): Boolean =
+        browserRepository.toggleBookmark(url, title)
+
+    fun removeBrowserBookmark(url: String) {
+        browserRepository.removeBookmark(url)
+    }
+
+    fun isBrowserBookmarked(url: String): Boolean = browserRepository.isBookmarked(url)
+
+    fun clearBrowserHistory() {
+        browserRepository.clearHistory()
+    }
+
+    fun clearBrowserBookmarks() {
+        browserRepository.clearBookmarks()
+    }
+
+    fun setBrowserSearchEngine(searchEngine: BrowserSearchEngine) {
+        browserRepository.updateSettings { it.copy(searchEngine = searchEngine) }
+    }
+
+    fun setBrowserJavaScriptEnabled(enabled: Boolean) {
+        browserRepository.updateSettings { it.copy(javaScriptEnabled = enabled) }
+    }
+
+    fun setBrowserCookiesEnabled(enabled: Boolean) {
+        browserRepository.updateSettings { it.copy(cookiesEnabled = enabled) }
+    }
+
+    fun setBrowserDesktopModeEnabled(enabled: Boolean) {
+        browserRepository.updateSettings { it.copy(desktopModeEnabled = enabled) }
+    }
+
+    fun resetBrowserSettings() {
+        browserRepository.resetSettings()
     }
 
     fun cancel(id: java.util.UUID) {

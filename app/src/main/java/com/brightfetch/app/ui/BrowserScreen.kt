@@ -1,11 +1,16 @@
 package com.brightfetch.app.ui
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.text.format.DateUtils
+import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.JavascriptInterface
@@ -43,30 +48,46 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -86,17 +107,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.brightfetch.app.MainViewModel
+import com.brightfetch.app.browser.BrowserBookmark
+import com.brightfetch.app.browser.BrowserHistoryEntry
+import com.brightfetch.app.browser.BrowserNavigation
+import com.brightfetch.app.browser.BrowserSearchEngine
+import com.brightfetch.app.browser.BrowserSettings
 import com.brightfetch.app.browser.MediaSniffer
 import com.brightfetch.app.model.MediaCandidate
 import com.brightfetch.app.ui.theme.Ink
 import com.brightfetch.app.ui.theme.Mint
 import com.brightfetch.app.ui.theme.SunnyYellow
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicLong
 
-class BrowserState {
+internal class BrowserTabState(val id: Long = nextBrowserTabId()) {
     var address by mutableStateOf("")
     var pageTitle by mutableStateOf("BrightFetch")
     var showLanding by mutableStateOf(true)
@@ -106,46 +134,209 @@ class BrowserState {
     internal var pendingUrl by mutableStateOf<String?>(null)
     internal var webView: WebView? = null
     internal var mediaReporter: BrowserMediaReporter? = null
+    internal var mobileUserAgent: String? = null
+    internal var appliedDesktopMode: Boolean? = null
+    internal var appliedJavaScript: Boolean? = null
+    internal var needsMediaRescan: Boolean = false
+}
 
-    fun navigate(raw: String, searchBase: String = "https://www.google.com/search?q=") {
-        val value = raw.trim()
-        if (value.isBlank()) return
-        val sharedUrl = Regex("https?://[^\\s<>\"']+", RegexOption.IGNORE_CASE)
-            .find(value)
-            ?.value
-            ?.trimEnd('.', ',', ';', ')', ']', '}')
-        val target = when {
-            sharedUrl != null -> sharedUrl
-            value.contains('.') && !value.contains(' ') -> "https://$value"
-            else -> searchBase + URLEncoder.encode(value, StandardCharsets.UTF_8.name())
-        }
-        address = target
-        pendingUrl = target
-        showLanding = false
+class BrowserState {
+    internal val tabs = mutableStateListOf(BrowserTabState())
+    internal var activeTabIndex by mutableIntStateOf(0)
+    private val fallbackTab = BrowserTabState()
+    private var disposed = false
+
+    internal val currentTab: BrowserTabState
+        get() = tabs.getOrNull(activeTabIndex.coerceAtLeast(0)) ?: fallbackTab
+
+    var address: String
+        get() = currentTab.address
+        set(value) { currentTab.address = value }
+    val pageTitle: String get() = currentTab.pageTitle
+    val showLanding: Boolean get() = currentTab.showLanding
+    val canGoBack: Boolean get() = currentTab.canGoBack
+    val canGoForward: Boolean get() = currentTab.canGoForward
+    val progress: Float get() = currentTab.progress
+    val tabCount: Int get() = tabs.size
+    internal val webView: WebView? get() = currentTab.webView
+    internal val hasHiddenPage: Boolean
+        get() = currentTab.showLanding && isHttpUrl(currentTab.webView?.url.orEmpty())
+
+    fun navigate(raw: String, searchEngine: BrowserSearchEngine = BrowserSearchEngine.GOOGLE) {
+        val target = BrowserNavigation.resolve(raw, searchEngine) ?: return
+        currentTab.address = target
+        currentTab.pageTitle = titleFromUrl(target)
+        currentTab.pendingUrl = target
+        currentTab.showLanding = false
     }
 
     fun home() {
-        showLanding = true
-        address = ""
-        pageTitle = "BrightFetch"
-        progress = 0f
+        currentTab.webView?.stopLoading()
+        currentTab.showLanding = true
+        currentTab.pendingUrl = null
+        currentTab.address = ""
+        currentTab.pageTitle = "BrightFetch"
+        currentTab.progress = 0f
+    }
+
+    fun newTab() {
+        if (disposed) return
+        tabs.add(BrowserTabState())
+        activeTabIndex = tabs.lastIndex
+    }
+
+    internal fun selectTab(id: Long): Boolean {
+        val index = tabs.indexOfFirst { it.id == id }
+        if (index < 0 || index == activeTabIndex) return false
+        activeTabIndex = index
+        currentTab.needsMediaRescan = true
+        return true
+    }
+
+    internal fun closeTab(id: Long) {
+        val index = tabs.indexOfFirst { it.id == id }
+        if (index < 0) return
+        if (tabs.size == 1) {
+            val oldTab = tabs[0]
+            tabs[0] = BrowserTabState()
+            activeTabIndex = 0
+            destroyTab(oldTab)
+            return
+        }
+        val wasActive = index == activeTabIndex
+        val tab = tabs.removeAt(index)
+        activeTabIndex = when {
+            index < activeTabIndex -> activeTabIndex - 1
+            activeTabIndex > tabs.lastIndex -> tabs.lastIndex
+            else -> activeTabIndex
+        }
+        if (wasActive) currentTab.needsMediaRescan = true
+        destroyTab(tab)
+    }
+
+    internal fun goBack() {
+        currentTab.webView?.takeIf { it.canGoBack() }?.let {
+            currentTab.showLanding = false
+            it.goBack()
+        }
+    }
+
+    internal fun goForward() {
+        currentTab.webView?.takeIf { it.canGoForward() }?.let {
+            currentTab.showLanding = false
+            it.goForward()
+        }
+    }
+
+    internal fun reload() {
+        currentTab.webView?.let {
+            currentTab.showLanding = false
+            it.reload()
+        }
+    }
+
+    internal fun restoreHiddenPage() {
+        val tab = currentTab
+        val url = tab.webView?.url?.takeIf(::isHttpUrl) ?: return
+        tab.showLanding = false
+        tab.address = url
+        tab.pageTitle = tab.webView?.title?.takeIf(String::isNotBlank) ?: titleFromUrl(url)
+        tab.progress = 1f
+        tab.needsMediaRescan = true
+    }
+
+    internal fun stopLoading() {
+        currentTab.webView?.stopLoading()
+        currentTab.progress = 1f
+    }
+
+    internal fun clearWebData() {
+        tabs.forEach { tab ->
+            tab.webView?.apply {
+                stopLoading()
+                clearCache(true)
+                clearHistory()
+            }
+            tab.canGoBack = false
+            tab.canGoForward = false
+        }
+    }
+
+    fun dispose() {
+        if (disposed) return
+        disposed = true
+        tabs.toList().forEach(::destroyTab)
+        tabs.clear()
+    }
+
+    private fun destroyTab(tab: BrowserTabState) {
+        tab.webView?.apply {
+            stopLoading()
+            removeJavascriptInterface(MEDIA_BRIDGE_NAME)
+            (parent as? ViewGroup)?.removeView(this)
+            destroy()
+        }
+        tab.webView = null
+        tab.mediaReporter = null
     }
 }
 
+private val browserTabIds = AtomicLong(0L)
+private fun nextBrowserTabId(): Long = browserTabIds.incrementAndGet()
+
 @Composable
 fun rememberBrowserState(): BrowserState = remember { BrowserState() }
+
+private enum class BrowserPanel {
+    NONE,
+    DETECTED,
+    HISTORY,
+    BOOKMARKS,
+    SETTINGS,
+    TABS,
+}
 
 @Composable
 fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
     val context = LocalContext.current
     val candidates by viewModel.candidates.collectAsState()
     val isResolvingPage by viewModel.isResolvingPage.collectAsState()
-    var showCandidateSheet by remember { mutableStateOf(false) }
+    val history by viewModel.browserHistory.collectAsState()
+    val bookmarks by viewModel.browserBookmarks.collectAsState()
+    val settings by viewModel.browserSettings.collectAsState()
+    var panel by remember { mutableStateOf(BrowserPanel.NONE) }
+    val currentPageUrl = state.address.takeIf(::isHttpUrl)
+    val isBookmarked = currentPageUrl != null && bookmarks.any { it.url == currentPageUrl }
 
-    BackHandler(enabled = !state.showLanding) {
+    LaunchedEffect(candidates.isEmpty()) {
+        if (candidates.isEmpty() && panel == BrowserPanel.DETECTED) panel = BrowserPanel.NONE
+    }
+
+    LaunchedEffect(settings) {
+        state.tabs.forEach { tab ->
+            val webView = tab.webView
+            val reporter = tab.mediaReporter
+            if (webView != null && reporter != null) {
+                applyBrowserSettings(webView, tab, settings, reporter)
+            }
+        }
+    }
+
+    BackHandler(
+        enabled = panel != BrowserPanel.NONE || state.hasHiddenPage || !state.showLanding || state.tabCount > 1,
+    ) {
         when {
-            state.webView?.canGoBack() == true -> state.webView?.goBack()
-            else -> state.home()
+            panel != BrowserPanel.NONE -> panel = BrowserPanel.NONE
+            state.hasHiddenPage -> {
+                state.restoreHiddenPage()
+                viewModel.clearCandidates()
+            }
+            state.webView?.canGoBack() == true -> state.goBack()
+            !state.showLanding -> state.home()
+            state.tabCount > 1 -> {
+                state.closeTab(state.currentTab.id)
+                viewModel.clearCandidates()
+            }
         }
     }
 
@@ -155,14 +346,38 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
             onHome = {
                 viewModel.clearCandidates()
                 state.home()
+                panel = BrowserPanel.NONE
             },
             onSubmit = {
                 viewModel.clearCandidates()
-                state.navigate(state.address)
+                state.navigate(state.address, settings.searchEngine)
+                panel = BrowserPanel.NONE
             },
             onNewTab = {
                 viewModel.clearCandidates()
-                state.home()
+                state.newTab()
+                panel = BrowserPanel.NONE
+            },
+            searchEngineName = settings.searchEngine.displayName,
+            isBookmarked = isBookmarked,
+            onToggleBookmark = {
+                currentPageUrl?.let { url ->
+                    val added = viewModel.toggleBrowserBookmark(url, state.pageTitle)
+                    Toast.makeText(context, if (added) "Bookmark added" else "Bookmark removed", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onShowTabs = { panel = BrowserPanel.TABS },
+            onShowHistory = { panel = BrowserPanel.HISTORY },
+            onShowBookmarks = { panel = BrowserPanel.BOOKMARKS },
+            onShowSettings = { panel = BrowserPanel.SETTINGS },
+            onRefresh = state::reload,
+            onStop = state::stopLoading,
+            onShare = { currentPageUrl?.let { sharePage(context, it, state.pageTitle) } },
+            onCopy = { currentPageUrl?.let { copyPageUrl(context, it) } },
+            onOpenExternal = {
+                currentPageUrl?.let { url ->
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                }
             },
             onClearDetected = viewModel::clearCandidates,
         )
@@ -174,27 +389,92 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
             )
         }
         Box(Modifier.weight(1f)) {
-            when {
-                showCandidateSheet && !isResolvingPage && candidates.isNotEmpty() -> DetectedMediaPanel(
+            when (panel) {
+                BrowserPanel.DETECTED -> DetectedMediaPanel(
                     candidates = candidates,
-                    onClose = { showCandidateSheet = false },
+                    onClose = { panel = BrowserPanel.NONE },
                     onDownload = { candidate ->
                         viewModel.enqueue(candidate)
                         Toast.makeText(context, "Added to downloads", Toast.LENGTH_SHORT).show()
-                        showCandidateSheet = false
+                        panel = BrowserPanel.NONE
                     },
                 )
-                state.showLanding -> BrowserLanding(
-                    state = state,
-                    onNavigate = {
+                BrowserPanel.HISTORY -> HistoryPanel(
+                    entries = history,
+                    onOpen = { url ->
                         viewModel.clearCandidates()
-                        state.navigate(it)
+                        state.navigate(url, settings.searchEngine)
+                        panel = BrowserPanel.NONE
                     },
+                    onClear = viewModel::clearBrowserHistory,
+                    onClose = { panel = BrowserPanel.NONE },
                 )
-                else -> BrowserPage(state, viewModel)
+                BrowserPanel.BOOKMARKS -> BookmarksPanel(
+                    bookmarks = bookmarks,
+                    onOpen = { url ->
+                        viewModel.clearCandidates()
+                        state.navigate(url, settings.searchEngine)
+                        panel = BrowserPanel.NONE
+                    },
+                    onRemove = viewModel::removeBrowserBookmark,
+                    onClear = viewModel::clearBrowserBookmarks,
+                    onClose = { panel = BrowserPanel.NONE },
+                )
+                BrowserPanel.SETTINGS -> BrowserSettingsPanel(
+                    settings = settings,
+                    onSearchEngineChange = viewModel::setBrowserSearchEngine,
+                    onJavaScriptChange = viewModel::setBrowserJavaScriptEnabled,
+                    onCookiesChange = viewModel::setBrowserCookiesEnabled,
+                    onDesktopModeChange = viewModel::setBrowserDesktopModeEnabled,
+                    onClearHistory = viewModel::clearBrowserHistory,
+                    onClearBrowsingData = {
+                        viewModel.clearBrowserHistory()
+                        state.clearWebData()
+                        CookieManager.getInstance().removeAllCookies {
+                            CookieManager.getInstance().flush()
+                            Toast.makeText(context, "History, cookies and cache cleared", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onReset = viewModel::resetBrowserSettings,
+                    onClose = { panel = BrowserPanel.NONE },
+                )
+                BrowserPanel.TABS -> TabsPanel(
+                    tabs = state.tabs,
+                    activeTabId = state.currentTab.id,
+                    onSelect = { id ->
+                        if (state.selectTab(id)) viewModel.clearCandidates()
+                        panel = BrowserPanel.NONE
+                    },
+                    onCloseTab = { id ->
+                        val wasActive = state.currentTab.id == id
+                        state.closeTab(id)
+                        if (wasActive) viewModel.clearCandidates()
+                    },
+                    onNewTab = {
+                        state.newTab()
+                        viewModel.clearCandidates()
+                        panel = BrowserPanel.NONE
+                    },
+                    onClose = { panel = BrowserPanel.NONE },
+                )
+                BrowserPanel.NONE -> when {
+                    state.showLanding -> BrowserLanding(
+                        state = state,
+                        onNavigate = {
+                            viewModel.clearCandidates()
+                            state.navigate(it, settings.searchEngine)
+                        },
+                        onOpenHistory = { panel = BrowserPanel.HISTORY },
+                        onOpenBookmarks = { panel = BrowserPanel.BOOKMARKS },
+                        onOpenSettings = { panel = BrowserPanel.SETTINGS },
+                    )
+                    else -> key(state.currentTab.id) {
+                        BrowserPage(state, state.currentTab, viewModel, settings)
+                    }
+                }
             }
         }
-        if (isResolvingPage) {
+        if (panel == BrowserPanel.NONE && isResolvingPage) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -203,23 +483,25 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                 Spacer(Modifier.width(12.dp))
                 Text("Extracting video…")
             }
-        } else if (candidates.isNotEmpty()) {
+        } else if ((panel == BrowserPanel.NONE || panel == BrowserPanel.DETECTED) && candidates.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .height(56.dp)
                     .background(Color(0xFFE9DFFF), RoundedCornerShape(18.dp))
-                    .clickable { showCandidateSheet = !showCandidateSheet },
+                    .clickable {
+                        panel = if (panel == BrowserPanel.DETECTED) BrowserPanel.NONE else BrowserPanel.DETECTED
+                    },
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    if (showCandidateSheet) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Download,
+                    if (panel == BrowserPanel.DETECTED) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Download,
                     contentDescription = null,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(if (showCandidateSheet) "Back to browser" else "${candidates.size} video detected")
+                Text(if (panel == BrowserPanel.DETECTED) "Back to browser" else "${candidates.size} video detected")
             }
         }
     }
@@ -260,11 +542,342 @@ private fun DetectedMediaPanel(
 }
 
 @Composable
+private fun PanelHeader(
+    title: String,
+    subtitle: String,
+    onClose: () -> Unit,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                subtitle,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 13.sp,
+                maxLines = 2,
+            )
+        }
+        if (actionLabel != null && onAction != null) {
+            TextButton(onClick = onAction) { Text(actionLabel) }
+        }
+        IconButton(onClick = onClose) {
+            Icon(Icons.Default.Close, contentDescription = "Back to browser")
+        }
+    }
+    HorizontalDivider()
+}
+
+@Composable
+private fun EmptyBrowserPanel(icon: androidx.compose.ui.graphics.vector.ImageVector, message: String) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(54.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(14.dp))
+        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun HistoryPanel(
+    entries: List<BrowserHistoryEntry>,
+    onOpen: (String) -> Unit,
+    onClear: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        PanelHeader(
+            title = "History",
+            subtitle = "Pages you visited are stored only on this device.",
+            onClose = onClose,
+            actionLabel = "Clear".takeIf { entries.isNotEmpty() },
+            onAction = onClear.takeIf { entries.isNotEmpty() },
+        )
+        if (entries.isEmpty()) {
+            EmptyBrowserPanel(Icons.Default.History, "No browsing history yet")
+        } else {
+            LazyColumn(Modifier.fillMaxSize()) {
+                items(entries, key = BrowserHistoryEntry::url) { entry ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpen(entry.url) }
+                            .padding(horizontal = 20.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            Modifier.size(42.dp).background(Color(0xFFE8F0FE), CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Default.History, contentDescription = null, tint = Color(0xFF3F67B3))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                entry.title.ifBlank { Uri.parse(entry.url).host ?: entry.url },
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                entry.url,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                DateUtils.getRelativeTimeSpanString(entry.visitedAt).toString(),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp,
+                            )
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(start = 74.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BookmarksPanel(
+    bookmarks: List<BrowserBookmark>,
+    onOpen: (String) -> Unit,
+    onRemove: (String) -> Unit,
+    onClear: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        PanelHeader(
+            title = "Bookmarks",
+            subtitle = "Saved pages are available after restarting the app.",
+            onClose = onClose,
+            actionLabel = "Clear".takeIf { bookmarks.isNotEmpty() },
+            onAction = onClear.takeIf { bookmarks.isNotEmpty() },
+        )
+        if (bookmarks.isEmpty()) {
+            EmptyBrowserPanel(Icons.Default.BookmarkBorder, "No bookmarks yet")
+        } else {
+            LazyColumn(Modifier.fillMaxSize()) {
+                items(bookmarks, key = BrowserBookmark::url) { bookmark ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpen(bookmark.url) }
+                            .padding(start = 20.dp, end = 8.dp, top = 11.dp, bottom = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            Modifier.size(42.dp).background(Color(0xFFFFE69B), CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Default.Bookmark, contentDescription = null, tint = Color(0xFF7A5B00))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                bookmark.title.ifBlank { Uri.parse(bookmark.url).host ?: bookmark.url },
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                bookmark.url,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        IconButton(onClick = { onRemove(bookmark.url) }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Remove bookmark")
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(start = 74.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabsPanel(
+    tabs: List<BrowserTabState>,
+    activeTabId: Long,
+    onSelect: (Long) -> Unit,
+    onCloseTab: (Long) -> Unit,
+    onNewTab: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        PanelHeader(
+            title = "Tabs",
+            subtitle = "${tabs.size} open ${if (tabs.size == 1) "tab" else "tabs"}",
+            onClose = onClose,
+            actionLabel = "New tab",
+            onAction = onNewTab,
+        )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(tabs, key = BrowserTabState::id) { tab ->
+                val selected = tab.id == activeTabId
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable { onSelect(tab.id) },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (selected) Color(0xFFFFE69B) else MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            if (tab.showLanding) Icons.Default.Home else Icons.Default.OpenInBrowser,
+                            contentDescription = null,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (tab.showLanding) "New tab" else tab.pageTitle.ifBlank { "Web page" },
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                if (tab.showLanding) "BrightFetch home" else tab.address,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (selected) Text("Current", fontSize = 11.sp, color = Color(0xFF725700))
+                        IconButton(onClick = { onCloseTab(tab.id) }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close tab")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowserSettingsPanel(
+    settings: BrowserSettings,
+    onSearchEngineChange: (BrowserSearchEngine) -> Unit,
+    onJavaScriptChange: (Boolean) -> Unit,
+    onCookiesChange: (Boolean) -> Unit,
+    onDesktopModeChange: (Boolean) -> Unit,
+    onClearHistory: () -> Unit,
+    onClearBrowsingData: () -> Unit,
+    onReset: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        PanelHeader(
+            title = "Browser settings",
+            subtitle = "These preferences are stored on this device.",
+            onClose = onClose,
+        )
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("Search engine", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            BrowserSearchEngine.entries.forEach { engine ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onSearchEngineChange(engine) }.padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = settings.searchEngine == engine, onClick = { onSearchEngineChange(engine) })
+                    Spacer(Modifier.width(8.dp))
+                    Text(engine.displayName)
+                }
+            }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+            SettingsToggleRow(
+                title = "JavaScript",
+                description = "Required by most modern sites and video detection.",
+                checked = settings.javaScriptEnabled,
+                onCheckedChange = onJavaScriptChange,
+            )
+            SettingsToggleRow(
+                title = "Accept cookies",
+                description = "Keeps sign-ins and site preferences between pages.",
+                checked = settings.cookiesEnabled,
+                onCheckedChange = onCookiesChange,
+            )
+            SettingsToggleRow(
+                title = "Desktop site",
+                description = "Request the desktop version and reload open pages.",
+                checked = settings.desktopModeEnabled,
+                onCheckedChange = onDesktopModeChange,
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+            Text("Privacy and storage", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            OutlinedButton(onClick = onClearHistory, modifier = Modifier.fillMaxWidth()) {
+                Text("Clear browsing history")
+            }
+            OutlinedButton(onClick = onClearBrowsingData, modifier = Modifier.fillMaxWidth()) {
+                Text("Clear history, cookies and cache")
+            }
+            TextButton(onClick = onReset, modifier = Modifier.fillMaxWidth()) {
+                Text("Reset browser settings")
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
 private fun BrowserTopBar(
     state: BrowserState,
     onHome: () -> Unit,
     onSubmit: () -> Unit,
     onNewTab: () -> Unit,
+    searchEngineName: String,
+    isBookmarked: Boolean,
+    onToggleBookmark: () -> Unit,
+    onShowTabs: () -> Unit,
+    onShowHistory: () -> Unit,
+    onShowBookmarks: () -> Unit,
+    onShowSettings: () -> Unit,
+    onRefresh: () -> Unit,
+    onStop: () -> Unit,
+    onShare: () -> Unit,
+    onCopy: () -> Unit,
+    onOpenExternal: () -> Unit,
     onClearDetected: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -287,7 +900,7 @@ private fun BrowserTopBar(
             onValueChange = { state.address = it },
             modifier = Modifier.weight(1f).height(54.dp),
             singleLine = true,
-            placeholder = { Text("Search with Google or enter URL", maxLines = 1) },
+            placeholder = { Text("Search with $searchEngineName or enter URL", maxLines = 1) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             shape = RoundedCornerShape(14.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
@@ -302,16 +915,105 @@ private fun BrowserTopBar(
             Icon(Icons.Default.Add, contentDescription = "New tab", tint = Ink)
         }
         Box(
-            Modifier.size(38.dp).background(Color.Transparent, RoundedCornerShape(8.dp)),
+            Modifier
+                .size(38.dp)
+                .background(Color.Transparent, RoundedCornerShape(8.dp))
+                .clickable(onClick = onShowTabs),
             contentAlignment = Alignment.Center,
         ) {
-            Text("1", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text(state.tabCount.toString(), fontWeight = FontWeight.Bold, fontSize = 18.sp)
         }
         Box {
             IconButton(onClick = { menuExpanded = true }) {
                 Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Ink)
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text(if (isBookmarked) "Remove bookmark" else "Bookmark this page") },
+                    leadingIcon = {
+                        Icon(if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, contentDescription = null)
+                    },
+                    enabled = isHttpUrl(state.address),
+                    onClick = {
+                        menuExpanded = false
+                        onToggleBookmark()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Bookmarks") },
+                    leadingIcon = { Icon(Icons.Default.Bookmark, contentDescription = null) },
+                    onClick = {
+                        menuExpanded = false
+                        onShowBookmarks()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("History") },
+                    leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },
+                    onClick = {
+                        menuExpanded = false
+                        onShowHistory()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Tabs") },
+                    leadingIcon = { Icon(Icons.Default.OpenInBrowser, contentDescription = null) },
+                    onClick = {
+                        menuExpanded = false
+                        onShowTabs()
+                    },
+                )
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text(if (state.progress in 0.01f..0.99f) "Stop loading" else "Refresh") },
+                    leadingIcon = {
+                        Icon(
+                            if (state.progress in 0.01f..0.99f) Icons.Default.Stop else Icons.Default.Refresh,
+                            contentDescription = null,
+                        )
+                    },
+                    enabled = state.webView != null,
+                    onClick = {
+                        menuExpanded = false
+                        if (state.progress in 0.01f..0.99f) onStop() else onRefresh()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Share page") },
+                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                    enabled = isHttpUrl(state.address),
+                    onClick = {
+                        menuExpanded = false
+                        onShare()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Copy page URL") },
+                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                    enabled = isHttpUrl(state.address),
+                    onClick = {
+                        menuExpanded = false
+                        onCopy()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Open in another browser") },
+                    leadingIcon = { Icon(Icons.Default.OpenInBrowser, contentDescription = null) },
+                    enabled = isHttpUrl(state.address),
+                    onClick = {
+                        menuExpanded = false
+                        onOpenExternal()
+                    },
+                )
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text("Settings") },
+                    leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null) },
+                    onClick = {
+                        menuExpanded = false
+                        onShowSettings()
+                    },
+                )
                 DropdownMenuItem(
                     text = { Text("Clear detected videos") },
                     onClick = {
@@ -323,7 +1025,7 @@ private fun BrowserTopBar(
                     text = { Text("Browser home") },
                     onClick = {
                         menuExpanded = false
-                        state.home()
+                        onHome()
                     },
                 )
             }
@@ -332,7 +1034,13 @@ private fun BrowserTopBar(
 }
 
 @Composable
-private fun BrowserLanding(state: BrowserState, onNavigate: (String) -> Unit) {
+private fun BrowserLanding(
+    state: BrowserState,
+    onNavigate: (String) -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenBookmarks: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     var showDisclaimer by remember { mutableStateOf(true) }
     Box(Modifier.fillMaxSize()) {
         SunnyBackground()
@@ -348,12 +1056,17 @@ private fun BrowserLanding(state: BrowserState, onNavigate: (String) -> Unit) {
                     Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 18.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
-                    QuickAction(Icons.AutoMirrored.Filled.ArrowBack, "Back", state.canGoBack) { state.webView?.goBack() }
-                    QuickAction(Icons.AutoMirrored.Filled.ArrowForward, "Forward", state.canGoForward) { state.webView?.goForward() }
-                    QuickAction(Icons.Default.Refresh, "Refresh") { state.webView?.reload() }
-                    QuickAction(Icons.Default.Palette, "Theme") { }
-                    QuickAction(Icons.Default.DarkMode, "Reading") { }
-                    QuickAction(Icons.Default.Tune, "Settings") { }
+                    QuickAction(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        "Return to page",
+                        state.hasHiddenPage,
+                        state::restoreHiddenPage,
+                    )
+                    QuickAction(Icons.AutoMirrored.Filled.ArrowForward, "Forward", state.canGoForward, state::goForward)
+                    QuickAction(Icons.Default.Refresh, "Refresh", state.webView != null, state::reload)
+                    QuickAction(Icons.Default.Bookmark, "Bookmarks", onClick = onOpenBookmarks)
+                    QuickAction(Icons.Default.History, "History", onClick = onOpenHistory)
+                    QuickAction(Icons.Default.Tune, "Settings", onClick = onOpenSettings)
                 }
             }
 
@@ -448,59 +1161,106 @@ private fun SearchEngineButton(mark: String, label: String, color: Color, onClic
 
 @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 @Composable
-private fun BrowserPage(state: BrowserState, viewModel: MainViewModel) {
+private fun BrowserPage(
+    state: BrowserState,
+    tab: BrowserTabState,
+    viewModel: MainViewModel,
+    browserSettings: BrowserSettings,
+) {
     val context = LocalContext.current
-    val reporter = state.mediaReporter ?: BrowserMediaReporter(viewModel).also {
-        state.mediaReporter = it
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val reporter = tab.mediaReporter ?: BrowserMediaReporter(viewModel) {
+        state.tabs.getOrNull(state.activeTabIndex)?.id == tab.id && !tab.showLanding
+    }.also {
+        tab.mediaReporter = it
     }
+
+    DisposableEffect(lifecycleOwner, tab.id) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> tab.webView?.onResume()
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> tab.webView?.onPause()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            tab.webView?.onResume()
+        } else {
+            tab.webView?.onPause()
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            tab.webView?.onPause()
+        }
+    }
+
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = {
-            state.webView ?: WebView(context).apply {
-                settings.javaScriptEnabled = true
+            tab.webView?.also { existing ->
+                (existing.parent as? ViewGroup)?.removeView(existing)
+                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                    existing.onResume()
+                }
+            } ?: WebView(context).apply {
+                tab.mobileUserAgent = settings.userAgentString
+                settings.javaScriptEnabled = browserSettings.javaScriptEnabled
                 settings.domStorageEnabled = true
                 settings.loadsImagesAutomatically = true
                 settings.mediaPlaybackRequiresUserGesture = true
                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-                settings.userAgentString = settings.userAgentString
-                CookieManager.getInstance().setAcceptCookie(true)
-                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                settings.builtInZoomControls = true
+                settings.displayZoomControls = false
+                settings.setSupportMultipleWindows(false)
+                settings.javaScriptCanOpenWindowsAutomatically = false
+                settings.useWideViewPort = true
+                CookieManager.getInstance().setAcceptCookie(browserSettings.cookiesEnabled)
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, browserSettings.cookiesEnabled)
                 reporter.updateContext(userAgent = settings.userAgentString)
                 addJavascriptInterface(MediaJavascriptBridge(reporter), MEDIA_BRIDGE_NAME)
 
                 webChromeClient = object : WebChromeClient() {
                     override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                        state.progress = newProgress / 100f
+                        if (!tab.showLanding) tab.progress = newProgress / 100f
                     }
 
                     override fun onReceivedTitle(view: WebView?, title: String?) {
-                        if (!title.isNullOrBlank()) {
-                            state.pageTitle = title
+                        if (!tab.showLanding && !title.isNullOrBlank()) {
+                            tab.pageTitle = title
                             reporter.updateContext(pageTitle = title)
+                            view?.url?.takeIf(::isHttpUrl)?.let { url ->
+                                viewModel.recordBrowserVisit(url, title)
+                            }
                         }
                     }
                 }
                 webViewClient = object : WebViewClient() {
                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                        if (!url.isNullOrBlank()) {
-                            state.address = url
-                            viewModel.clearCandidates()
-                            reporter.updateContext(pageUrl = url, pageTitle = state.pageTitle)
+                        if (!tab.showLanding && !url.isNullOrBlank()) {
+                            tab.address = url
+                            tab.pageTitle = titleFromUrl(url)
+                            if (state.currentTab.id == tab.id) viewModel.clearCandidates()
+                            reporter.updateContext(pageUrl = url, pageTitle = tab.pageTitle)
                             reporter.resolveKnownPage(url)
                         }
-                        updateNavigationState(state, view)
+                        updateNavigationState(tab, view)
                     }
 
                     override fun onPageFinished(view: WebView?, url: String?) {
-                        state.progress = 1f
-                        updateNavigationState(state, view)
-                        reporter.updateContext(pageUrl = url, pageTitle = state.pageTitle)
+                        updateNavigationState(tab, view)
+                        if (tab.showLanding) return
+                        tab.progress = 1f
+                        reporter.updateContext(pageUrl = url, pageTitle = tab.pageTitle)
+                        url?.takeIf(::isHttpUrl)?.let { visitedUrl ->
+                            viewModel.recordBrowserVisit(visitedUrl, tab.pageTitle)
+                        }
                         if (view != null) installMediaObserver(view)
                     }
 
                     override fun onPageCommitVisible(view: WebView?, url: String?) {
                         super.onPageCommitVisible(view, url)
-                        if (view != null) installMediaObserver(view)
+                        if (!tab.showLanding && view != null) installMediaObserver(view)
                     }
 
                     override fun onLoadResource(view: WebView?, url: String?) {
@@ -544,20 +1304,62 @@ private fun BrowserPage(state: BrowserState, viewModel: MainViewModel) {
                         reporter.reportDownload(downloadUrl, disposition, mimeType, userAgent)
                     }
                 })
-            }.also { state.webView = it }
+                applyBrowserSettings(this, tab, browserSettings, reporter)
+                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) onResume()
+            }.also { tab.webView = it }
         },
         update = { webView ->
-            state.pendingUrl?.let { target ->
-                state.pendingUrl = null
+            applyBrowserSettings(webView, tab, browserSettings, reporter)
+            tab.pendingUrl?.let { target ->
+                tab.pendingUrl = null
                 webView.loadUrl(target)
+            }
+            if (tab.needsMediaRescan) {
+                tab.needsMediaRescan = false
+                webView.url?.takeIf(::isHttpUrl)?.let { url ->
+                    reporter.updateContext(pageUrl = url, pageTitle = tab.pageTitle)
+                    reporter.resolveKnownPage(url)
+                }
+                resetMediaObserver(webView)
             }
         },
     )
 }
 
-private fun updateNavigationState(state: BrowserState, webView: WebView?) {
-    state.canGoBack = webView?.canGoBack() == true
-    state.canGoForward = webView?.canGoForward() == true
+@SuppressLint("SetJavaScriptEnabled")
+private fun applyBrowserSettings(
+    webView: WebView,
+    tab: BrowserTabState,
+    browserSettings: BrowserSettings,
+    reporter: BrowserMediaReporter,
+) {
+    val previousJavaScript = tab.appliedJavaScript
+    tab.appliedJavaScript = browserSettings.javaScriptEnabled
+    webView.settings.javaScriptEnabled = browserSettings.javaScriptEnabled
+    CookieManager.getInstance().setAcceptCookie(browserSettings.cookiesEnabled)
+    CookieManager.getInstance().setAcceptThirdPartyCookies(webView, browserSettings.cookiesEnabled)
+
+    val mobileUserAgent = tab.mobileUserAgent
+        ?: WebSettings.getDefaultUserAgent(webView.context).also { tab.mobileUserAgent = it }
+    val targetUserAgent = if (browserSettings.desktopModeEnabled) DESKTOP_USER_AGENT else mobileUserAgent
+    if (webView.settings.userAgentString != targetUserAgent) {
+        webView.settings.userAgentString = targetUserAgent
+    }
+    webView.settings.loadWithOverviewMode = browserSettings.desktopModeEnabled
+    reporter.updateContext(userAgent = targetUserAgent)
+
+    val previousDesktopMode = tab.appliedDesktopMode
+    tab.appliedDesktopMode = browserSettings.desktopModeEnabled
+    val desktopChanged = previousDesktopMode != null && previousDesktopMode != browserSettings.desktopModeEnabled
+    val javaScriptChanged = previousJavaScript != null && previousJavaScript != browserSettings.javaScriptEnabled
+    if ((desktopChanged || javaScriptChanged) && webView.url != null) {
+        webView.reload()
+    }
+}
+
+private fun updateNavigationState(tab: BrowserTabState, webView: WebView?) {
+    tab.canGoBack = webView?.canGoBack() == true
+    tab.canGoForward = webView?.canGoForward() == true
 }
 
 private fun installMediaObserver(webView: WebView) {
@@ -584,6 +1386,9 @@ private fun installMediaObserver(webView: WebView) {
           }
 
           function scanElements() {
+            document.querySelectorAll('a[target="_blank"]').forEach(function(anchor) {
+              anchor.target = '_self';
+            });
             document.querySelectorAll('video').forEach(function(video) {
               report(video.currentSrc, true);
               report(video.src, true);
@@ -631,6 +1436,10 @@ private fun installMediaObserver(webView: WebView) {
             scanPerformance();
             scanEmbeddedJson();
           };
+          window.__brightFetchResetAndScan = function() {
+            seen.clear();
+            window.__brightFetchScan();
+          };
           window.__brightFetchScan();
           new MutationObserver(window.__brightFetchScan).observe(document.documentElement || document, {
             childList: true, subtree: true, attributes: true, attributeFilter: ['src']
@@ -645,7 +1454,17 @@ private fun installMediaObserver(webView: WebView) {
     webView.evaluateJavascript(script, null)
 }
 
-internal class BrowserMediaReporter(private val viewModel: MainViewModel) {
+private fun resetMediaObserver(webView: WebView) {
+    webView.evaluateJavascript(
+        "if (window.__brightFetchResetAndScan) { window.__brightFetchResetAndScan(); }",
+        null,
+    )
+}
+
+internal class BrowserMediaReporter(
+    private val viewModel: MainViewModel,
+    private val isActiveTab: () -> Boolean = { true },
+) {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @Volatile private var pageTitle: String = "Detected video"
@@ -664,6 +1483,7 @@ internal class BrowserMediaReporter(private val viewModel: MainViewModel) {
         val pageSnapshot = pageUrl
         val agentSnapshot = userAgent
         mainHandler.post {
+            if (!isActiveTab()) return@post
             MediaSniffer.fromRequest(
                 url = url,
                 pageTitle = titleSnapshot,
@@ -675,6 +1495,7 @@ internal class BrowserMediaReporter(private val viewModel: MainViewModel) {
     }
 
     fun resolveKnownPage(url: String) {
+        if (!isActiveTab()) return
         viewModel.resolveKnownPage(
             pageUrl = url,
             pageTitle = pageTitle,
@@ -689,6 +1510,7 @@ internal class BrowserMediaReporter(private val viewModel: MainViewModel) {
         val pageSnapshot = reportedPageUrl?.takeIf(String::isNotBlank) ?: pageUrl
         val agentSnapshot = userAgent
         mainHandler.post {
+            if (!isActiveTab()) return@post
             MediaSniffer.fromVideoElement(
                 url = url,
                 pageTitle = titleSnapshot,
@@ -704,6 +1526,7 @@ internal class BrowserMediaReporter(private val viewModel: MainViewModel) {
         val pageSnapshot = pageUrl
         val agentSnapshot = reportedUserAgent?.takeIf(String::isNotBlank) ?: userAgent
         mainHandler.post {
+            if (!isActiveTab()) return@post
             MediaSniffer.fromDownload(
                 url = url,
                 contentDisposition = disposition,
@@ -729,6 +1552,31 @@ private class MediaJavascriptBridge(private val reporter: BrowserMediaReporter) 
 }
 
 private const val MEDIA_BRIDGE_NAME = "BrightFetchMedia"
+
+private const val DESKTOP_USER_AGENT =
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+private fun isHttpUrl(value: String): Boolean = BrowserNavigation.isHttpUrl(value)
+
+private fun titleFromUrl(url: String): String = runCatching {
+    java.net.URI(url).host?.removePrefix("www.")
+}.getOrNull().orEmpty().ifBlank { "Loading…" }
+
+private fun copyPageUrl(context: Context, url: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("Page URL", url))
+    Toast.makeText(context, "Page URL copied", Toast.LENGTH_SHORT).show()
+}
+
+private fun sharePage(context: Context, url: String, title: String) {
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, title)
+        putExtra(Intent.EXTRA_TEXT, url)
+    }
+    context.startActivity(Intent.createChooser(shareIntent, "Share page"))
+}
 
 @Composable
 private fun CandidateRow(candidate: MediaCandidate, onDownload: () -> Unit) {
