@@ -15,12 +15,15 @@ import com.brightfetch.app.browser.BrowserRepository
 import com.brightfetch.app.browser.BrowserSearchEngine
 import com.brightfetch.app.browser.BrowserSettings
 import com.brightfetch.app.browser.MediaUrlClassifier
+import com.brightfetch.app.browser.MediaFormatResolver
 import com.brightfetch.app.browser.News24hPageResolver
 import com.brightfetch.app.browser.Kenh14PageResolver
 import com.brightfetch.app.browser.MediaPageIdentity
 import com.brightfetch.app.model.DownloadSnapshot
 import com.brightfetch.app.model.DownloadedVideo
 import com.brightfetch.app.model.MediaCandidate
+import com.brightfetch.app.model.MediaDownloadOption
+import com.brightfetch.app.model.MediaFormatInspectionState
 import com.brightfetch.app.storage.PublicVideoStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,6 +42,7 @@ import kotlinx.coroutines.withContext
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val workManager = WorkManager.getInstance(application)
     private val browserRepository = BrowserRepository(application)
+    private val mediaFormatResolver = MediaFormatResolver()
 
     val browserHistory: StateFlow<List<BrowserHistoryEntry>> = browserRepository.history
     val browserBookmarks: StateFlow<List<BrowserBookmark>> = browserRepository.bookmarks
@@ -50,11 +54,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isResolvingPage = MutableStateFlow(false)
     val isResolvingPage: StateFlow<Boolean> = _isResolvingPage.asStateFlow()
 
+    private val _mediaFormatInspection = MutableStateFlow<MediaFormatInspectionState>(
+        MediaFormatInspectionState.Hidden,
+    )
+    val mediaFormatInspection: StateFlow<MediaFormatInspectionState> =
+        _mediaFormatInspection.asStateFlow()
+
     private var pageResolverJob: Job? = null
     private var resolvingPageUrl: String? = null
     private var resolverGeneration = 0L
     private var resolvedTikTokVideoId: String? = null
     private var resolvedPreferredPageKey: String? = null
+    private var mediaFormatJob: Job? = null
+    private var mediaFormatGeneration = 0L
 
     private val _downloads = MutableStateFlow<List<DownloadSnapshot>>(emptyList())
     val downloads: StateFlow<List<DownloadSnapshot>> = _downloads.asStateFlow()
@@ -114,6 +126,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearCandidates() {
+        dismissMediaFormats()
         resolverGeneration += 1
         pageResolverJob?.cancel()
         pageResolverJob = null
@@ -272,6 +285,79 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun enqueue(candidate: MediaCandidate) {
         DownloadScheduler.enqueue(getApplication(), candidate)
+    }
+
+    fun inspectMediaFormats(candidate: MediaCandidate) {
+        mediaFormatJob?.cancel()
+        val generation = ++mediaFormatGeneration
+        _mediaFormatInspection.value = MediaFormatInspectionState.Loading(candidate)
+        mediaFormatJob = viewModelScope.launch {
+            try {
+                val options = mediaFormatResolver.resolve(candidate)
+                currentCoroutineContext().ensureActive()
+                if (mediaFormatGeneration != generation) return@launch
+                if (options.isEmpty()) {
+                    _mediaFormatInspection.value = MediaFormatInspectionState.Failed(
+                        candidate,
+                        "No downloadable video format was found.",
+                    )
+                } else {
+                    if (BuildConfig.DEBUG) {
+                        options.forEach { option ->
+                            Log.d(
+                                MEDIA_LOG_TAG,
+                                "Download option: ${option.label} | url=${option.downloadUrl} | " +
+                                    "size=${option.estimatedSizeBytes} exact=${option.sizeIsExact}",
+                            )
+                        }
+                    }
+                    _mediaFormatInspection.value = MediaFormatInspectionState.Ready(candidate, options)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (mediaFormatGeneration != generation) return@launch
+                if (BuildConfig.DEBUG) {
+                    Log.w(MEDIA_LOG_TAG, "Cannot inspect video formats: ${candidate.url}", error)
+                }
+                _mediaFormatInspection.value = MediaFormatInspectionState.Failed(
+                    candidate,
+                    error.message?.take(240)?.takeIf(String::isNotBlank)
+                        ?: "Could not inspect this video. The link may have expired.",
+                )
+            } finally {
+                if (mediaFormatGeneration == generation) mediaFormatJob = null
+            }
+        }
+    }
+
+    fun retryMediaFormats() {
+        val candidate = when (val state = _mediaFormatInspection.value) {
+            is MediaFormatInspectionState.Failed -> state.candidate
+            is MediaFormatInspectionState.Ready -> state.candidate
+            is MediaFormatInspectionState.Loading -> state.candidate
+            MediaFormatInspectionState.Hidden -> null
+        }
+        candidate?.let(::inspectMediaFormats)
+    }
+
+    fun enqueue(candidate: MediaCandidate, option: MediaDownloadOption) {
+        if (!option.isAvailable) return
+        val selected = option.toCandidate(candidate)
+        Log.i(
+            MEDIA_LOG_TAG,
+            "Selected download URL: ${selected.url} | format=${option.outputExtension} | " +
+                "quality=${option.label} | estimatedBytes=${option.estimatedSizeBytes}",
+        )
+        DownloadScheduler.enqueue(getApplication(), selected)
+        dismissMediaFormats()
+    }
+
+    fun dismissMediaFormats() {
+        mediaFormatGeneration += 1
+        mediaFormatJob?.cancel()
+        mediaFormatJob = null
+        _mediaFormatInspection.value = MediaFormatInspectionState.Hidden
     }
 
     fun recordBrowserVisit(url: String, title: String) {

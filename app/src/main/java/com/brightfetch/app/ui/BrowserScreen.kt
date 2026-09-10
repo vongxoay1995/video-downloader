@@ -118,6 +118,7 @@ import com.brightfetch.app.browser.BrowserSearchEngine
 import com.brightfetch.app.browser.BrowserSettings
 import com.brightfetch.app.browser.MediaSniffer
 import com.brightfetch.app.model.MediaCandidate
+import com.brightfetch.app.model.MediaFormatInspectionState
 import com.brightfetch.app.ui.theme.Ink
 import com.brightfetch.app.ui.theme.Mint
 import com.brightfetch.app.ui.theme.SunnyYellow
@@ -301,6 +302,7 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
     val context = LocalContext.current
     val candidates by viewModel.candidates.collectAsState()
     val isResolvingPage by viewModel.isResolvingPage.collectAsState()
+    val formatInspection by viewModel.mediaFormatInspection.collectAsState()
     val history by viewModel.browserHistory.collectAsState()
     val bookmarks by viewModel.browserBookmarks.collectAsState()
     val settings by viewModel.browserSettings.collectAsState()
@@ -393,11 +395,7 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                 BrowserPanel.DETECTED -> DetectedMediaPanel(
                     candidates = candidates,
                     onClose = { panel = BrowserPanel.NONE },
-                    onDownload = { candidate ->
-                        viewModel.enqueue(candidate)
-                        Toast.makeText(context, "Added to downloads", Toast.LENGTH_SHORT).show()
-                        panel = BrowserPanel.NONE
-                    },
+                    onInspect = viewModel::inspectMediaFormats,
                 )
                 BrowserPanel.HISTORY -> HistoryPanel(
                     entries = history,
@@ -505,13 +503,51 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
             }
         }
     }
+
+    when (val inspection = formatInspection) {
+        MediaFormatInspectionState.Hidden -> Unit
+        is MediaFormatInspectionState.Loading -> MediaFormatSheet(
+            candidate = inspection.candidate,
+            isLoading = true,
+            options = emptyList(),
+            errorMessage = null,
+            onRetry = viewModel::retryMediaFormats,
+            onDismiss = viewModel::dismissMediaFormats,
+            onDownload = { option -> viewModel.enqueue(inspection.candidate, option) },
+            onCopyLink = { copyDownloadUrl(context, it) },
+        )
+        is MediaFormatInspectionState.Ready -> MediaFormatSheet(
+            candidate = inspection.candidate,
+            isLoading = false,
+            options = inspection.options,
+            errorMessage = null,
+            onRetry = viewModel::retryMediaFormats,
+            onDismiss = viewModel::dismissMediaFormats,
+            onDownload = { option ->
+                viewModel.enqueue(inspection.candidate, option)
+                Toast.makeText(context, "Added to downloads", Toast.LENGTH_SHORT).show()
+                panel = BrowserPanel.NONE
+            },
+            onCopyLink = { copyDownloadUrl(context, it) },
+        )
+        is MediaFormatInspectionState.Failed -> MediaFormatSheet(
+            candidate = inspection.candidate,
+            isLoading = false,
+            options = emptyList(),
+            errorMessage = inspection.message,
+            onRetry = viewModel::retryMediaFormats,
+            onDismiss = viewModel::dismissMediaFormats,
+            onDownload = { option -> viewModel.enqueue(inspection.candidate, option) },
+            onCopyLink = { copyDownloadUrl(context, it) },
+        )
+    }
 }
 
 @Composable
 private fun DetectedMediaPanel(
     candidates: List<MediaCandidate>,
     onClose: () -> Unit,
-    onDownload: (MediaCandidate) -> Unit,
+    onInspect: (MediaCandidate) -> Unit,
 ) {
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(
@@ -535,7 +571,7 @@ private fun DetectedMediaPanel(
         }
         LazyColumn(Modifier.fillMaxWidth().weight(1f).padding(bottom = 8.dp)) {
             items(candidates, key = MediaCandidate::id) { candidate ->
-                CandidateRow(candidate) { onDownload(candidate) }
+                CandidateRow(candidate) { onInspect(candidate) }
             }
         }
     }
@@ -1569,6 +1605,12 @@ private fun copyPageUrl(context: Context, url: String) {
     Toast.makeText(context, "Page URL copied", Toast.LENGTH_SHORT).show()
 }
 
+private fun copyDownloadUrl(context: Context, url: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("Video download URL", url))
+    Toast.makeText(context, "Download URL copied", Toast.LENGTH_SHORT).show()
+}
+
 private fun sharePage(context: Context, url: String, title: String) {
     val shareIntent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
@@ -1579,9 +1621,12 @@ private fun sharePage(context: Context, url: String, title: String) {
 }
 
 @Composable
-private fun CandidateRow(candidate: MediaCandidate, onDownload: () -> Unit) {
+private fun CandidateRow(candidate: MediaCandidate, onInspect: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onInspect)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(44.dp).background(Mint, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
@@ -1617,7 +1662,7 @@ private fun CandidateRow(candidate: MediaCandidate, onDownload: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Button(onClick = onDownload) { Text("Download") }
+        Button(onClick = onInspect) { Text("Formats") }
     }
 }
 

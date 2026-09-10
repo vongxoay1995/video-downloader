@@ -23,4 +23,8 @@ data class DownloadedVideo(
     val modifiedAt: Long,
     val mimeType: String,
     val displayPath: String,
+    val downloadedAt: Long = modifiedAt,
+    val durationMillis: Long = 0L,
+    val width: Int = 0,
+    val height: Int = 0,
 )

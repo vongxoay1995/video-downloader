@@ -3,12 +3,14 @@ package com.brightfetch.app.storage
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import android.util.LruCache
 import com.brightfetch.app.model.DownloadedVideo
 import com.brightfetch.app.model.VideoFileNames
 import kotlinx.coroutines.currentCoroutineContext
@@ -55,7 +57,11 @@ object PublicVideoStore {
             add(MediaStore.Video.Media._ID)
             add(MediaStore.Video.Media.DISPLAY_NAME)
             add(MediaStore.Video.Media.SIZE)
+            add(MediaStore.Video.Media.DATE_ADDED)
             add(MediaStore.Video.Media.DATE_MODIFIED)
+            add(MediaStore.Video.Media.DURATION)
+            add(MediaStore.Video.Media.WIDTH)
+            add(MediaStore.Video.Media.HEIGHT)
             add(MediaStore.Video.Media.MIME_TYPE)
             if (isModernStorage) add(MediaStore.Video.Media.RELATIVE_PATH)
             else add(MediaStore.Video.Media.DATA)
@@ -83,7 +89,11 @@ object PublicVideoStore {
                 val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
                 val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
                 val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+                val addedColumn = cursor.getColumnIndex(MediaStore.Video.Media.DATE_ADDED)
                 val modifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_MODIFIED)
+                val durationColumn = cursor.getColumnIndex(MediaStore.Video.Media.DURATION)
+                val widthColumn = cursor.getColumnIndex(MediaStore.Video.Media.WIDTH)
+                val heightColumn = cursor.getColumnIndex(MediaStore.Video.Media.HEIGHT)
                 val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE)
                 val relativePathColumn = if (isModernStorage) {
                     cursor.getColumnIndexOrThrow(MediaStore.Video.Media.RELATIVE_PATH)
@@ -100,6 +110,22 @@ object PublicVideoStore {
                         val name = cursor.getString(nameColumn).orEmpty()
                         if (!VideoFileNames.hasSupportedExtension(name)) continue
                         val id = cursor.getLong(idColumn)
+                        val uri = ContentUris.withAppendedId(collection, id)
+                        val size = cursor.getLong(sizeColumn)
+                        val modifiedAt = cursor.getLong(modifiedColumn).coerceAtLeast(0L) * 1_000L
+                        val downloadedAt = cursor.longOrZero(addedColumn)
+                            .coerceAtLeast(0L)
+                            .times(1_000L)
+                            .takeIf { it > 0L }
+                            ?: modifiedAt
+                        val storedDuration = cursor.longOrZero(durationColumn).coerceAtLeast(0L)
+                        val storedWidth = cursor.intOrZero(widthColumn).coerceAtLeast(0)
+                        val storedHeight = cursor.intOrZero(heightColumn).coerceAtLeast(0)
+                        val extracted = if (storedDuration <= 0L || storedWidth <= 0 || storedHeight <= 0) {
+                            readVideoMetadata(context, uri, size, modifiedAt)
+                        } else {
+                            VideoMetadata(storedDuration, storedWidth, storedHeight)
+                        }
                         val displayPath = if (isModernStorage) {
                             val relativePath = cursor.getString(relativePathColumn)
                                 .orEmpty()
@@ -111,15 +137,19 @@ object PublicVideoStore {
                         }
                         add(
                             DownloadedVideo(
-                                uri = ContentUris.withAppendedId(collection, id),
+                                uri = uri,
                                 name = name,
-                                size = cursor.getLong(sizeColumn),
-                                modifiedAt = cursor.getLong(modifiedColumn) * 1_000L,
+                                size = size,
+                                modifiedAt = modifiedAt,
                                 mimeType = cursor.getString(mimeColumn)
                                     ?: VideoFileNames.mimeTypeFor(name),
                                 displayPath = displayPath.ifBlank {
                                     "/storage/emulated/0/$RELATIVE_DIRECTORY$name"
                                 },
+                                downloadedAt = downloadedAt,
+                                durationMillis = storedDuration.takeIf { it > 0L } ?: extracted.durationMillis,
+                                width = storedWidth.takeIf { it > 0 } ?: extracted.width,
+                                height = storedHeight.takeIf { it > 0 } ?: extracted.height,
                             )
                         )
                     }
@@ -132,7 +162,9 @@ object PublicVideoStore {
     }
 
     fun delete(context: Context, video: DownloadedVideo): Boolean = runCatching {
-        context.contentResolver.delete(video.uri, null, null) > 0
+        val deleted = context.contentResolver.delete(video.uri, null, null) > 0
+        if (deleted) VideoThumbnailLoader.remove(video)
+        deleted
     }.getOrElse { error ->
         Log.e(TAG, "Cannot delete uri=${video.uri} path=${video.displayPath}", error)
         false
@@ -302,6 +334,43 @@ object PublicVideoStore {
         return folder.resolve("$stem ($index).$extension")
     }
 
+    private fun readVideoMetadata(
+        context: Context,
+        uri: Uri,
+        size: Long,
+        modifiedAt: Long,
+    ): VideoMetadata {
+        val cacheKey = "$uri|$size|$modifiedAt"
+        metadataCache.get(cacheKey)?.let { return it }
+        val metadata = runCatching {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, uri)
+                val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    ?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+                var width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                    ?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+                var height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                    ?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+                val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+                    ?.toIntOrNull() ?: 0
+                if (rotation == 90 || rotation == 270) {
+                    val originalWidth = width
+                    width = height
+                    height = originalWidth
+                }
+                VideoMetadata(duration, width, height)
+            } finally {
+                retriever.release()
+            }
+        }.getOrElse { error ->
+            Log.w(TAG, "Cannot read video metadata for uri=$uri", error)
+            VideoMetadata()
+        }
+        metadataCache.put(cacheKey, metadata)
+        return metadata
+    }
+
     private suspend fun copyInterruptibly(source: File, output: OutputStream) {
         FileInputStream(source).buffered(BUFFER_SIZE).use { input ->
             val buffer = ByteArray(BUFFER_SIZE)
@@ -316,9 +385,23 @@ object PublicVideoStore {
 
     private const val BUFFER_SIZE = 64 * 1024
 
+    private data class VideoMetadata(
+        val durationMillis: Long = 0L,
+        val width: Int = 0,
+        val height: Int = 0,
+    )
+
+    private val metadataCache = LruCache<String, VideoMetadata>(200)
+
     private fun videoCollection(): Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
     } else {
         MediaStore.Video.Media.EXTERNAL_CONTENT_URI
     }
 }
+
+private fun android.database.Cursor.longOrZero(columnIndex: Int): Long =
+    if (columnIndex >= 0 && !isNull(columnIndex)) getLong(columnIndex) else 0L
+
+private fun android.database.Cursor.intOrZero(columnIndex: Int): Int =
+    if (columnIndex >= 0 && !isNull(columnIndex)) getInt(columnIndex) else 0

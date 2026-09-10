@@ -3,7 +3,9 @@ package com.brightfetch.app.ui
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,12 +19,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -34,11 +36,18 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,11 +57,9 @@ import androidx.work.WorkInfo
 import com.brightfetch.app.MainViewModel
 import com.brightfetch.app.model.DownloadSnapshot
 import com.brightfetch.app.model.DownloadedVideo
+import com.brightfetch.app.storage.VideoThumbnailLoader
 import com.brightfetch.app.ui.theme.Mint
 import com.brightfetch.app.ui.theme.SunnyYellow
-import java.text.DateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun DownloadingScreen(viewModel: MainViewModel) {
@@ -83,8 +90,13 @@ fun DownloadingScreen(viewModel: MainViewModel) {
 fun VideosScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
     val videos by viewModel.videos.collectAsState()
+    val totalBytes = videos.sumOf { it.size.coerceAtLeast(0L) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        ScreenHeader("Videos", "Internal storage / Movies / BrightFetch")
+        ScreenHeader(
+            "Videos",
+            "${videos.size} ${if (videos.size == 1) "video" else "videos"}  •  " +
+                "${VideoLibraryFormatting.bytes(totalBytes)}  •  Movies/BrightFetch",
+        )
         if (videos.isEmpty()) {
             EmptyState(
                 icon = Icons.Default.VideoLibrary,
@@ -205,35 +217,159 @@ private fun VideoCard(video: DownloadedVideo, onPlay: () -> Unit, onShare: () ->
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(62.dp).background(Mint, RoundedCornerShape(16.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(32.dp))
+        Column(Modifier.fillMaxWidth().padding(13.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                VideoThumbnail(video = video, onPlay = onPlay)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        video.name,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 20.sp,
+                    )
+                    Spacer(Modifier.height(7.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        MetadataBadge(
+                            text = VideoLibraryFormatting.extension(video.name, video.mimeType),
+                            background = Color(0xFF9B2FC9),
+                        )
+                        MetadataBadge(
+                            text = VideoLibraryFormatting.quality(video.width, video.height),
+                            background = Color(0xFF456AA3),
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "${VideoLibraryFormatting.resolution(video.width, video.height)}  •  " +
+                            VideoLibraryFormatting.bytes(video.size),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(video.name, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "${formatBytes(video.size)}  •  ${DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(video.modifiedAt))}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
-                )
-                Text(
-                    video.displayPath,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+
+            Spacer(Modifier.height(9.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Downloaded ${VideoLibraryFormatting.downloadedDate(video.downloadedAt)}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        video.displayPath,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                IconButton(onClick = onPlay, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Play video")
+                }
+                IconButton(onClick = onShare, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.Share, contentDescription = "Share video")
+                }
+                IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete video")
+                }
             }
-            IconButton(onClick = onPlay) { Icon(Icons.Default.FolderOpen, contentDescription = "Open") }
-            IconButton(onClick = onShare) { Icon(Icons.Default.Share, contentDescription = "Share") }
-            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Delete") }
         }
     }
+}
+
+@Composable
+private fun VideoThumbnail(video: DownloadedVideo, onPlay: () -> Unit) {
+    val context = LocalContext.current.applicationContext
+    val cacheKey = "${video.uri}|${video.size}|${video.modifiedAt}"
+    var thumbnail by remember(cacheKey) { mutableStateOf<android.graphics.Bitmap?>(null) }
+
+    LaunchedEffect(cacheKey) {
+        thumbnail = VideoThumbnailLoader.load(context, video)
+    }
+
+    Box(
+        modifier = Modifier
+            .width(122.dp)
+            .height(82.dp)
+            .clip(RoundedCornerShape(13.dp))
+            .background(Color(0xFF263238))
+            .clickable(onClick = onPlay),
+        contentAlignment = Alignment.Center,
+    ) {
+        val loadedThumbnail = thumbnail
+        if (loadedThumbnail != null && !loadedThumbnail.isRecycled) {
+            Image(
+                bitmap = loadedThumbnail.asImageBitmap(),
+                contentDescription = "Thumbnail for ${video.name}",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Box(
+                Modifier.size(38.dp).background(Color.White.copy(alpha = 0.88f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = Color(0xFF263238),
+                    modifier = Modifier.size(27.dp),
+                )
+            }
+        }
+
+        val quality = VideoLibraryFormatting.quality(video.width, video.height)
+        if (quality != "Unknown quality") {
+            Text(
+                text = quality,
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(5.dp)
+                    .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(5.dp))
+                    .padding(horizontal = 5.dp, vertical = 2.dp),
+            )
+        }
+
+        VideoLibraryFormatting.duration(video.durationMillis)?.let { duration ->
+            Text(
+                text = duration,
+                color = Color.White,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(5.dp)
+                    .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 4.dp, vertical = 1.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetadataBadge(text: String, background: Color) {
+    Text(
+        text = text,
+        color = Color.White,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        modifier = Modifier
+            .background(background, RoundedCornerShape(5.dp))
+            .padding(horizontal = 6.dp, vertical = 3.dp),
+    )
 }
 
 @Composable
@@ -283,14 +419,4 @@ private fun shareVideo(context: Context, video: DownloadedVideo) {
     }
 }
 
-private fun formatBytes(bytes: Long): String {
-    if (bytes < 1024L) return "$bytes B"
-    val units = arrayOf("KB", "MB", "GB", "TB")
-    var value = bytes.toDouble()
-    var unit = -1
-    while (value >= 1024 && unit < units.lastIndex) {
-        value /= 1024
-        unit++
-    }
-    return String.format(Locale.US, "%.1f %s", value, units[unit])
-}
+private fun formatBytes(bytes: Long): String = VideoLibraryFormatting.bytes(bytes)
