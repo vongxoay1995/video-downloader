@@ -1,153 +1,144 @@
 package com.brightfetch.app.download
 
-import android.media.MediaCodec
+import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaFormat
-import android.media.MediaMuxer
-import android.os.Build
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import androidx.annotation.OptIn
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.transformer.Composition
+import androidx.media3.transformer.ExportException
+import androidx.media3.transformer.ExportResult
+import androidx.media3.transformer.Transformer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.io.File
-import java.nio.ByteBuffer
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
-/** Repackages a downloaded HLS transport stream as MP4 without re-encoding. */
+/** Repackages a downloaded MPEG-TS HLS stream as a standards-compliant MP4. */
+@OptIn(UnstableApi::class)
 internal object HlsMp4Remuxer {
-    private val supportedTrackMimes = setOf(
-        MediaFormat.MIMETYPE_VIDEO_AVC,
-        MediaFormat.MIMETYPE_VIDEO_HEVC,
-        MediaFormat.MIMETYPE_AUDIO_AAC,
+    suspend fun remux(context: Context, input: File, output: File) {
+        require(input.isFile && input.length() > 0L) { "HLS source is empty" }
+        val sourceTracks = runCatching { inspectTracks(input) }.getOrElse { error ->
+            throw HlsRemuxException(
+                error.message?.let { "Cannot read HLS tracks: $it" } ?: "Cannot read HLS tracks",
+            )
+        }
+        if (!sourceTracks.hasVideo) throw HlsRemuxException("HLS stream has no video track")
+
+        if (output.exists() && !output.delete()) {
+            throw HlsRemuxException("Cannot replace the temporary MP4")
+        }
+
+        try {
+            exportOnMainLooper(context.applicationContext, input, output)
+            val outputTracks = inspectTracks(output)
+            if (!output.isFile || output.length() <= 0L || !outputTracks.hasVideo) {
+                throw HlsRemuxException("Packaged MP4 has no playable video track")
+            }
+            if (sourceTracks.hasAudio && !outputTracks.hasAudio) {
+                throw HlsRemuxException("Packaged MP4 lost its audio track")
+            }
+            if (outputTracks.durationUs <= 0L) {
+                throw HlsRemuxException("Packaged MP4 has an invalid duration")
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            output.delete()
+            throw cancelled
+        } catch (error: HlsRemuxException) {
+            output.delete()
+            throw error
+        } catch (error: Exception) {
+            output.delete()
+            throw HlsRemuxException(
+                error.message?.takeIf(String::isNotBlank)?.let { "Cannot package HLS as MP4: $it" }
+                    ?: "Cannot package HLS as MP4",
+            )
+        }
+    }
+
+    private suspend fun exportOnMainLooper(
+        context: Context,
+        input: File,
+        output: File,
+    ): ExportResult = withContext(Dispatchers.Main.immediate) {
+        suspendCancellableCoroutine { continuation ->
+            lateinit var transformer: Transformer
+            val listener = object : Transformer.Listener {
+                override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                    if (continuation.isActive) continuation.resume(exportResult)
+                }
+
+                override fun onError(
+                    composition: Composition,
+                    exportResult: ExportResult,
+                    exportException: ExportException,
+                ) {
+                    if (continuation.isActive) continuation.resumeWithException(exportException)
+                }
+            }
+            transformer = Transformer.Builder(context)
+                .setLooper(Looper.getMainLooper())
+                .addListener(listener)
+                .build()
+
+            continuation.invokeOnCancellation {
+                Handler(Looper.getMainLooper()).post {
+                    transformer.cancel()
+                    output.delete()
+                }
+            }
+
+            val mediaItem = MediaItem.Builder()
+                .setUri(Uri.fromFile(input))
+                // The worker intentionally stores the source as `.ts.part`; provide the real
+                // container type so Media3 uses its MPEG-TS extractor instead of guessing.
+                .setMimeType(MimeTypes.VIDEO_MP2T)
+                .build()
+            try {
+                transformer.start(mediaItem, output.absolutePath)
+            } catch (error: Exception) {
+                if (continuation.isActive) continuation.resumeWithException(error)
+            }
+        }
+    }
+
+    private fun inspectTracks(file: File): TrackSummary {
+        if (!file.isFile || file.length() <= 0L) return TrackSummary()
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(file.absolutePath)
+            var hasVideo = false
+            var hasAudio = false
+            var durationUs = 0L
+            repeat(extractor.trackCount) { index ->
+                val format = extractor.getTrackFormat(index)
+                val mimeType = runCatching { format.getString(MediaFormat.KEY_MIME) }.getOrNull()
+                hasVideo = hasVideo || mimeType?.startsWith("video/") == true
+                hasAudio = hasAudio || mimeType?.startsWith("audio/") == true
+                durationUs = maxOf(
+                    durationUs,
+                    runCatching { format.getLong(MediaFormat.KEY_DURATION) }.getOrDefault(0L),
+                )
+            }
+            TrackSummary(hasVideo = hasVideo, hasAudio = hasAudio, durationUs = durationUs)
+        } finally {
+            extractor.release()
+        }
+    }
+
+    private data class TrackSummary(
+        val hasVideo: Boolean = false,
+        val hasAudio: Boolean = false,
+        val durationUs: Long = 0L,
     )
 
-    suspend fun remux(input: File, output: File) {
-        require(input.isFile && input.length() > 0L) { "HLS source is empty" }
-        val extractor = MediaExtractor()
-        var muxer: MediaMuxer? = null
-        var muxerStarted = false
-        var completed = false
-        try {
-            extractor.setDataSource(input.absolutePath)
-            val sourceTracks = (0 until extractor.trackCount).map { index ->
-                index to extractor.getTrackFormat(index)
-            }
-            val sourceVideoTracks = sourceTracks.filter { (_, format) ->
-                format.mimeType()?.startsWith("video/") == true
-            }
-            val sourceAudioTracks = sourceTracks.filter { (_, format) ->
-                format.mimeType()?.startsWith("audio/") == true
-            }
-            if (sourceVideoTracks.isEmpty()) throw HlsRemuxException("HLS stream has no video track")
-
-            val selectedTracks = sourceTracks.filter { (_, format) ->
-                format.mimeType() in supportedTrackMimes
-            }
-            if (selectedTracks.none { (_, format) -> format.mimeType()?.startsWith("video/") == true }) {
-                throw HlsRemuxException("HLS video codec cannot be packaged as MP4")
-            }
-            if (sourceAudioTracks.isNotEmpty() &&
-                selectedTracks.none { (_, format) -> format.mimeType()?.startsWith("audio/") == true }
-            ) {
-                throw HlsRemuxException("HLS audio codec cannot be packaged as MP4")
-            }
-
-            if (output.exists()) output.delete()
-            val activeMuxer = MediaMuxer(
-                output.absolutePath,
-                MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4,
-            )
-            muxer = activeMuxer
-            val trackMap = selectedTracks.associate { (sourceTrack, format) ->
-                extractor.selectTrack(sourceTrack)
-                sourceTrack to activeMuxer.addTrack(format)
-            }
-            val fallbackStepsUs = LongArray(extractor.trackCount) { 1L }
-            selectedTracks.forEach { (sourceTrack, format) ->
-                fallbackStepsUs[sourceTrack] = format.fallbackSampleStepUs()
-            }
-            val timestampNormalizer = HlsTimestampNormalizer(
-                trackCount = extractor.trackCount,
-                fallbackStepsUs = fallbackStepsUs,
-            )
-            activeMuxer.start()
-            muxerStarted = true
-
-            var buffer = ByteBuffer.allocateDirect(DEFAULT_SAMPLE_BUFFER_BYTES)
-            val info = MediaCodec.BufferInfo()
-            while (true) {
-                currentCoroutineContext().ensureActive()
-                val sourceTrack = extractor.sampleTrackIndex
-                if (sourceTrack < 0) break
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    val requiredSize = extractor.sampleSize
-                    if (requiredSize > Int.MAX_VALUE) throw HlsRemuxException("HLS sample is too large")
-                    if (requiredSize > buffer.capacity()) {
-                        buffer = ByteBuffer.allocateDirect(requiredSize.toInt())
-                    }
-                }
-
-                buffer.clear()
-                val size = extractor.readSampleData(buffer, 0)
-                if (size < 0) break
-                if (size > buffer.capacity()) throw HlsRemuxException("HLS sample exceeds remux buffer")
-                val presentationTimeUs = timestampNormalizer.normalize(
-                    trackIndex = sourceTrack,
-                    rawTimestampUs = extractor.sampleTime,
-                )
-                val flags = if (extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) {
-                    MediaCodec.BUFFER_FLAG_KEY_FRAME
-                } else {
-                    0
-                }
-                info.set(0, size, presentationTimeUs, flags)
-                buffer.position(0)
-                buffer.limit(size)
-                activeMuxer.writeSampleData(trackMap.getValue(sourceTrack), buffer, info)
-                extractor.advance()
-            }
-
-            activeMuxer.stop()
-            muxerStarted = false
-            completed = output.isFile && output.length() > 0L
-            if (!completed) throw HlsRemuxException("MP4 output is empty")
-        } finally {
-            if (muxerStarted) runCatching { muxer?.stop() }
-            runCatching { muxer?.release() }
-            runCatching { extractor.release() }
-            if (!completed) output.delete()
-        }
-    }
-
-    private fun MediaFormat.mimeType(): String? = runCatching {
-        getString(MediaFormat.KEY_MIME)
-    }.getOrNull()
-
-    private fun MediaFormat.fallbackSampleStepUs(): Long {
-        val mimeType = mimeType().orEmpty()
-        return when {
-            mimeType.startsWith("video/") -> {
-                val frameRate = integerOrNull(MediaFormat.KEY_FRAME_RATE)?.takeIf { it > 0 }
-                frameRate?.let { MICROS_PER_SECOND / it } ?: DEFAULT_VIDEO_SAMPLE_STEP_US
-            }
-
-            mimeType.startsWith("audio/") -> {
-                val sampleRate = integerOrNull(MediaFormat.KEY_SAMPLE_RATE)?.takeIf { it > 0 }
-                sampleRate?.let { AAC_SAMPLES_PER_FRAME * MICROS_PER_SECOND / it }
-                    ?: DEFAULT_AUDIO_SAMPLE_STEP_US
-            }
-
-            else -> 1L
-        }
-    }
-
-    private fun MediaFormat.integerOrNull(key: String): Int? = runCatching {
-        getInteger(key)
-    }.getOrNull()
-
     class HlsRemuxException(message: String) : Exception(message)
-
-    private const val DEFAULT_SAMPLE_BUFFER_BYTES = 8 * 1024 * 1024
-    private const val MICROS_PER_SECOND = 1_000_000L
-    private const val AAC_SAMPLES_PER_FRAME = 1_024L
-    private const val DEFAULT_VIDEO_SAMPLE_STEP_US = 33_333L
-    private const val DEFAULT_AUDIO_SAMPLE_STEP_US = 23_220L
 }

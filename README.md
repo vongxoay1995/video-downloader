@@ -16,9 +16,11 @@ BrightFetch is an Android video-downloader MVP built with Kotlin, Jetpack Compos
 - TikTok candidates show the MP4 suffix, vertical resolution, duration, and exact file size from a one-byte CDN metadata probe before download.
 - Google is the default address-bar search engine; the selected engine is remembered. 24h article pages resolve the real HLS manifest hidden behind their blob-based player.
 - Kênh14 article pages prefer the original `data-vid` MP4 and use the article headline as the saved file name instead of internal CDN identifiers.
+- Tapping a detected video opens a format sheet instead of downloading immediately. Direct links show their final redirected URL and exact Range-probed size when available; HLS masters show every supported quality, child-playlist URL, codec, duration, segment count, and estimated size.
+- HLS child playlists requested by WebView are collapsed into one detected video; the format resolver expands the master into real quality choices so a segment or duplicate playlist is not presented as a separate video.
 - Direct HTTP(S) video downloads with foreground notifications, progress, cancellation, and Range-based resume.
-- VOD HLS (`.m3u8`) downloads with automatic selection of the highest-bandwidth variant, including standard AES-128 playlists with a publicly accessible key.
-- Public MediaStore library at `Internal storage/Movies/BrightFetch`, with open, share, and delete actions.
+- VOD HLS (`.m3u8`) downloads preserve the exact quality selected by the user, including standard AES-128 playlists with a publicly accessible key, and package MPEG-TS streams into a validated MP4 with Media3 Transformer.
+- Public MediaStore library at `Internal storage/Movies/BrightFetch`, with real cached thumbnails, quality, resolution, duration, extension, file size, `dd/MM/yyyy` download date, and in-app playback with sound, seek, retry, share, and delete actions.
 - Output names are normalized to supported video extensions; non-video suffixes such as `.bin` or `.dat` are replaced from the detected MIME type.
 
 ## Safety and MVP limitations

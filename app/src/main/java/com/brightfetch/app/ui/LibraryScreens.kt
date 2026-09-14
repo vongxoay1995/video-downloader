@@ -87,7 +87,10 @@ fun DownloadingScreen(viewModel: MainViewModel) {
 }
 
 @Composable
-fun VideosScreen(viewModel: MainViewModel) {
+fun VideosScreen(
+    viewModel: MainViewModel,
+    onPlayVideo: (DownloadedVideo) -> Unit,
+) {
     val context = LocalContext.current
     val videos by viewModel.videos.collectAsState()
     val totalBytes = videos.sumOf { it.size.coerceAtLeast(0L) }
@@ -112,7 +115,7 @@ fun VideosScreen(viewModel: MainViewModel) {
                 items(videos, key = { it.uri.toString() }) { video ->
                     VideoCard(
                         video = video,
-                        onPlay = { openVideo(context, video) },
+                        onPlay = { onPlayVideo(video) },
                         onShare = { shareVideo(context, video) },
                         onDelete = {
                             viewModel.deleteVideo(video)
@@ -392,18 +395,6 @@ private fun EmptyState(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-    }
-}
-
-private fun openVideo(context: Context, video: DownloadedVideo) {
-    runCatching {
-        context.startActivity(
-            Intent(Intent.ACTION_VIEW)
-                .setDataAndType(video.uri, video.mimeType)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        )
-    }.onFailure {
-        Toast.makeText(context, "No app can open this video", Toast.LENGTH_SHORT).show()
     }
 }
 

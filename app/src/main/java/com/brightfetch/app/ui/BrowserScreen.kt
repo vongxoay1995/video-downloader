@@ -63,7 +63,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -117,12 +116,9 @@ import com.brightfetch.app.browser.BrowserNavigation
 import com.brightfetch.app.browser.BrowserSearchEngine
 import com.brightfetch.app.browser.BrowserSettings
 import com.brightfetch.app.browser.MediaSniffer
-import com.brightfetch.app.model.MediaCandidate
 import com.brightfetch.app.model.MediaFormatInspectionState
 import com.brightfetch.app.ui.theme.Ink
-import com.brightfetch.app.ui.theme.Mint
 import com.brightfetch.app.ui.theme.SunnyYellow
-import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
 
 internal class BrowserTabState(val id: Long = nextBrowserTabId()) {
@@ -290,7 +286,6 @@ fun rememberBrowserState(): BrowserState = remember { BrowserState() }
 
 private enum class BrowserPanel {
     NONE,
-    DETECTED,
     HISTORY,
     BOOKMARKS,
     SETTINGS,
@@ -309,10 +304,6 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
     var panel by remember { mutableStateOf(BrowserPanel.NONE) }
     val currentPageUrl = state.address.takeIf(::isHttpUrl)
     val isBookmarked = currentPageUrl != null && bookmarks.any { it.url == currentPageUrl }
-
-    LaunchedEffect(candidates.isEmpty()) {
-        if (candidates.isEmpty() && panel == BrowserPanel.DETECTED) panel = BrowserPanel.NONE
-    }
 
     LaunchedEffect(settings) {
         state.tabs.forEach { tab ->
@@ -392,11 +383,6 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
         }
         Box(Modifier.weight(1f)) {
             when (panel) {
-                BrowserPanel.DETECTED -> DetectedMediaPanel(
-                    candidates = candidates,
-                    onClose = { panel = BrowserPanel.NONE },
-                    onInspect = viewModel::inspectMediaFormats,
-                )
                 BrowserPanel.HISTORY -> HistoryPanel(
                     entries = history,
                     onOpen = { url ->
@@ -481,7 +467,7 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                 Spacer(Modifier.width(12.dp))
                 Text("Extracting video…")
             }
-        } else if ((panel == BrowserPanel.NONE || panel == BrowserPanel.DETECTED) && candidates.isNotEmpty()) {
+        } else if (panel == BrowserPanel.NONE && candidates.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -489,17 +475,17 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                     .height(56.dp)
                     .background(Color(0xFFE9DFFF), RoundedCornerShape(18.dp))
                     .clickable {
-                        panel = if (panel == BrowserPanel.DETECTED) BrowserPanel.NONE else BrowserPanel.DETECTED
+                        viewModel.inspectMediaFormats(candidates.first())
                     },
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    if (panel == BrowserPanel.DETECTED) Icons.AutoMirrored.Filled.ArrowBack else Icons.Default.Download,
+                    Icons.Default.Download,
                     contentDescription = null,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(if (panel == BrowserPanel.DETECTED) "Back to browser" else "${candidates.size} video detected")
+                Text("Download video")
             }
         }
     }
@@ -540,40 +526,6 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
             onDownload = { option -> viewModel.enqueue(inspection.candidate, option) },
             onCopyLink = { copyDownloadUrl(context, it) },
         )
-    }
-}
-
-@Composable
-private fun DetectedMediaPanel(
-    candidates: List<MediaCandidate>,
-    onClose: () -> Unit,
-    onInspect: (MediaCandidate) -> Unit,
-) {
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-            Text(
-                "Detected videos",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                "Only download files you are authorized to use.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            }
-            IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, contentDescription = "Back to browser")
-            }
-        }
-        LazyColumn(Modifier.fillMaxWidth().weight(1f).padding(bottom = 8.dp)) {
-            items(candidates, key = MediaCandidate::id) { candidate ->
-                CandidateRow(candidate) { onInspect(candidate) }
-            }
-        }
     }
 }
 
@@ -1619,77 +1571,3 @@ private fun sharePage(context: Context, url: String, title: String) {
     }
     context.startActivity(Intent.createChooser(shareIntent, "Share page"))
 }
-
-@Composable
-private fun CandidateRow(candidate: MediaCandidate, onInspect: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onInspect)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(44.dp).background(Mint, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.Download, contentDescription = null)
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(candidate.suggestedFileName, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val extension = candidate.suggestedFileName.substringAfterLast('.', "mp4").lowercase(Locale.US)
-            Row(
-                modifier = Modifier.padding(top = 4.dp, bottom = 3.dp),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CandidateMetadataBadge(extension, Color(0xFFF28B38), Color.White)
-                candidate.height?.takeIf { it > 0 }?.let {
-                    CandidateMetadataBadge("${it}p", Color(0xFF76B852), Color.White)
-                }
-                candidate.contentLengthBytes?.takeIf { it > 0L }?.let {
-                    CandidateMetadataBadge(formatFileSize(it), Color(0xFFE7E7E7), Ink)
-                }
-            }
-            val duration = candidate.durationSeconds?.takeIf { it >= 0L }?.let(::formatDuration)
-            Text(
-                if (candidate.isHls) {
-                    "HLS stream"
-                } else {
-                    listOfNotNull(Uri.parse(candidate.url).host, duration).joinToString(" • ")
-                },
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Button(onClick = onInspect) { Text("Formats") }
-    }
-}
-
-@Composable
-private fun CandidateMetadataBadge(text: String, background: Color, foreground: Color) {
-    Text(
-        text = text,
-        color = foreground,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
-        maxLines = 1,
-        modifier = Modifier.background(background, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
-    )
-}
-
-private fun formatFileSize(bytes: Long): String {
-    val megabytes = bytes / 1_000_000.0
-    return when {
-        megabytes >= 100.0 -> String.format(Locale.US, "%.0f MB", megabytes)
-        megabytes >= 10.0 -> String.format(Locale.US, "%.1f MB", megabytes)
-        else -> String.format(Locale.US, "%.2f MB", megabytes)
-    }
-}
-
-private fun formatDuration(seconds: Long): String = String.format(
-    Locale.US,
-    "%02d:%02d",
-    seconds / 60,
-    seconds % 60,
-)

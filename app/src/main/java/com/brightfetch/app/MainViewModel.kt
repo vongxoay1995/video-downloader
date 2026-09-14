@@ -96,11 +96,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
         _candidates.update { current ->
-            if (current.any { it.url == candidate.url }) return@update current
+            val exactIndex = current.indexOfFirst { it.url == candidate.url }
+            if (exactIndex >= 0) {
+                val merged = mergeCandidate(current[exactIndex], candidate)
+                if (merged == current[exactIndex]) return@update current
+                return@update current.toMutableList().apply { this[exactIndex] = merged }
+            }
 
             val candidatePageKey = MediaPageIdentity.key(candidate.pageUrl)
             if (candidatePageKey != null && candidatePageKey == resolvedPreferredPageKey) {
                 return@update current
+            }
+
+            if (candidate.isHls && candidatePageKey != null) {
+                val existingIndex = current.indexOfFirst { existing ->
+                    existing.isHls && MediaPageIdentity.key(existing.pageUrl) == candidatePageKey
+                }
+                if (existingIndex >= 0) {
+                    val existing = current[existingIndex]
+                    // A WebView requests the master and then one or more child playlists. Keep a
+                    // single entry for the page, preferring a clearly named master; qualities are
+                    // expanded later by MediaFormatResolver instead of appearing as fake videos.
+                    if (hlsCandidateScore(candidate) <= hlsCandidateScore(existing)) {
+                        return@update current
+                    }
+                    return@update current.toMutableList().apply { this[existingIndex] = candidate }
+                }
             }
 
             val videoId = TikTokPageResolver.videoPageId(candidate.pageUrl)
@@ -270,6 +291,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if ("webapp-prime" in normalized) score += 20
         else if ("webapp" in normalized) score += 10
         return score
+    }
+
+    private fun hlsCandidateScore(candidate: MediaCandidate): Int {
+        val path = runCatching { java.net.URI(candidate.url).path.lowercase() }.getOrDefault("")
+        val fileName = path.substringAfterLast('/')
+        return when {
+            "master" in fileName -> 100
+            "master" in path -> 80
+            "playlist" in fileName -> 40
+            else -> 0
+        }
+    }
+
+    private fun mergeCandidate(existing: MediaCandidate, incoming: MediaCandidate): MediaCandidate {
+        val preferredTitle = if (candidateTitleScore(incoming.title) > candidateTitleScore(existing.title)) {
+            incoming.title
+        } else {
+            existing.title
+        }
+        return existing.copy(
+            title = preferredTitle,
+            pageUrl = incoming.pageUrl?.takeIf(String::isNotBlank) ?: existing.pageUrl,
+            mimeType = incoming.mimeType?.takeIf(String::isNotBlank) ?: existing.mimeType,
+            userAgent = incoming.userAgent?.takeIf(String::isNotBlank) ?: existing.userAgent,
+            cookie = incoming.cookie?.takeIf(String::isNotBlank) ?: existing.cookie,
+            width = incoming.width?.takeIf { it > 0 } ?: existing.width,
+            height = incoming.height?.takeIf { it > 0 } ?: existing.height,
+            durationSeconds = incoming.durationSeconds?.takeIf { it >= 0L } ?: existing.durationSeconds,
+            contentLengthBytes = incoming.contentLengthBytes?.takeIf { it > 0L }
+                ?: existing.contentLengthBytes,
+            preferredFileName = incoming.preferredFileName?.takeIf(String::isNotBlank)
+                ?: existing.preferredFileName,
+        )
+    }
+
+    private fun candidateTitleScore(title: String): Int {
+        val normalized = title.trim().lowercase()
+        if (normalized.isBlank()) return 0
+        if (normalized in setOf("brightfetch", "detected video", "error response", "webpage not available")) {
+            return 1
+        }
+        return 10 + title.length.coerceAtMost(100)
     }
 
     private fun resolvedTitle(pageTitle: String, pageUrl: String): String {

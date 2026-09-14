@@ -83,7 +83,7 @@ class VideoDownloadWorker(
                 val downloaded = downloadHls(url, hlsSourceFile)
                 if (!downloaded) return@withContext failure("Download was interrupted")
                 updateProgress(96, hlsSourceFile.length(), hlsSourceFile.length(), "Packaging MP4…")
-                HlsMp4Remuxer.remux(hlsSourceFile, partFile)
+                HlsMp4Remuxer.remux(applicationContext, hlsSourceFile, partFile)
                 resolvedMimeType = "video/mp4"
                 true
             } else {

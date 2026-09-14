@@ -283,7 +283,7 @@ private fun FormatOptionCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = option.label,
+                    text = optionQualityLabel(option),
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp,
                     maxLines = 1,
@@ -341,7 +341,7 @@ private fun SelectedOptionDetails(
     ) {
         ExtensionBadge(option.outputExtension)
         Text(
-            text = option.label,
+            text = optionQualityLabel(option),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
         )
@@ -357,7 +357,9 @@ private fun SelectedOptionDetails(
         optionResolution(option),
         formatBitrate(option),
         formatDuration(option.durationSeconds),
-        option.segmentCount?.takeIf { it > 0 }?.let { "$it video segments" },
+        option.segmentCount?.takeIf { it > 0 }?.let {
+            "$it video ${if (it == 1) "segment" else "segments"}"
+        },
         option.codecs?.takeIf(String::isNotBlank)?.let { "Codec: $it" },
     )
     if (detailItems.isNotEmpty()) {
@@ -463,6 +465,9 @@ private fun optionResolution(option: MediaDownloadOption): String? {
         else -> null
     }
 }
+
+private fun optionQualityLabel(option: MediaDownloadOption): String =
+    option.label.substringBefore(" • ").ifBlank { option.label }
 
 private fun optionSizeLabel(option: MediaDownloadOption): String {
     val size = option.estimatedSizeBytes?.takeIf { it > 0L } ?: return "Size unknown"
