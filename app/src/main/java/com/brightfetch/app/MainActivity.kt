@@ -24,7 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -33,10 +32,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.brightfetch.app.ui.BrowserScreen
 import com.brightfetch.app.ui.DownloadingScreen
-import com.brightfetch.app.ui.VideoPlayerScreen
 import com.brightfetch.app.ui.VideosScreen
 import com.brightfetch.app.ui.rememberBrowserState
-import com.brightfetch.app.model.DownloadedVideo
 import com.brightfetch.app.ui.theme.BrightFetchTheme
 
 class MainActivity : ComponentActivity() {
@@ -85,7 +82,6 @@ private enum class AppTab(val label: String) {
 @Composable
 private fun BrightFetchApp(mainViewModel: MainViewModel = viewModel()) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    var playingVideo by remember { mutableStateOf<DownloadedVideo?>(null) }
     val browserState = rememberBrowserState()
 
     DisposableEffect(browserState) {
@@ -94,43 +90,32 @@ private fun BrightFetchApp(mainViewModel: MainViewModel = viewModel()) {
         }
     }
 
-    val currentVideo = playingVideo
-    if (currentVideo != null) {
-        VideoPlayerScreen(
-            video = currentVideo,
-            onBack = { playingVideo = null },
-        )
-    } else {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            containerColor = Color.Transparent,
-            bottomBar = {
-                NavigationBar(containerColor = Color(0xFFFFF6CE)) {
-                    AppTab.entries.forEachIndexed { index, tab ->
-                        val icon = when (tab) {
-                            AppTab.HOME -> Icons.Default.Home
-                            AppTab.DOWNLOADING -> Icons.Default.Download
-                            AppTab.VIDEOS -> Icons.Default.Folder
-                        }
-                        NavigationBarItem(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            icon = { Icon(icon, contentDescription = tab.label) },
-                            label = { Text(tab.label) },
-                        )
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = Color.Transparent,
+        bottomBar = {
+            NavigationBar(containerColor = Color(0xFFFFF6CE)) {
+                AppTab.entries.forEachIndexed { index, tab ->
+                    val icon = when (tab) {
+                        AppTab.HOME -> Icons.Default.Home
+                        AppTab.DOWNLOADING -> Icons.Default.Download
+                        AppTab.VIDEOS -> Icons.Default.Folder
                     }
-                }
-            },
-        ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) {
-                when (AppTab.entries[selectedTab]) {
-                    AppTab.HOME -> BrowserScreen(browserState, mainViewModel)
-                    AppTab.DOWNLOADING -> DownloadingScreen(mainViewModel)
-                    AppTab.VIDEOS -> VideosScreen(
-                        viewModel = mainViewModel,
-                        onPlayVideo = { playingVideo = it },
+                    NavigationBarItem(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        icon = { Icon(icon, contentDescription = tab.label) },
+                        label = { Text(tab.label) },
                     )
                 }
+            }
+        },
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            when (AppTab.entries[selectedTab]) {
+                AppTab.HOME -> BrowserScreen(browserState, mainViewModel)
+                AppTab.DOWNLOADING -> DownloadingScreen(mainViewModel)
+                AppTab.VIDEOS -> VideosScreen(viewModel = mainViewModel)
             }
         }
     }

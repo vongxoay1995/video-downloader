@@ -20,7 +20,7 @@ BrightFetch is an Android video-downloader MVP built with Kotlin, Jetpack Compos
 - HLS child playlists requested by WebView are collapsed into one detected video; the format resolver expands the master into real quality choices so a segment or duplicate playlist is not presented as a separate video.
 - Direct HTTP(S) video downloads with foreground notifications, progress, cancellation, and Range-based resume.
 - VOD HLS (`.m3u8`) downloads preserve the exact quality selected by the user, including standard AES-128 playlists with a publicly accessible key, and package MPEG-TS streams into a validated MP4 with Media3 Transformer.
-- Public MediaStore library at `Internal storage/Movies/BrightFetch`, with real cached thumbnails, quality, resolution, duration, extension, file size, `dd/MM/yyyy` download date, and in-app playback with sound, seek, retry, share, and delete actions.
+- Public MediaStore library at `Internal storage/Movies/BrightFetch`, with real cached thumbnails, quality, resolution, duration, extension, file size, `dd/MM/yyyy` download date, playback through Android's system app chooser, share, and delete actions.
 - Output names are normalized to supported video extensions; non-video suffixes such as `.bin` or `.dat` are replaced from the detected MIME type.
 
 ## Safety and MVP limitations

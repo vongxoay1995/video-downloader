@@ -39,6 +39,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,6 +73,7 @@ internal fun MediaFormatSheet(
     onCopyLink: (String) -> Unit,
 ) {
     var selectedOptionId by remember(candidate.id) { mutableStateOf<String?>(null) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(options) {
         if (options.none { it.id == selectedOptionId }) {
@@ -86,6 +88,7 @@ internal fun MediaFormatSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = { BottomSheetDefaults.DragHandle() },
     ) {
@@ -266,16 +269,16 @@ private fun FormatOptionCard(
 
     Card(
         modifier = Modifier
-            .width(156.dp)
-            .heightIn(min = 142.dp)
+            .width(132.dp)
+            .heightIn(min = 76.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
         border = BorderStroke(if (selected) 2.dp else 1.dp, borderColor),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(13.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -285,7 +288,7 @@ private fun FormatOptionCard(
                 Text(
                     text = optionQualityLabel(option),
                     fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
+                    fontSize = 16.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -294,33 +297,17 @@ private fun FormatOptionCard(
                 ExtensionBadge(option.outputExtension)
             }
             Text(
-                text = optionSizeLabel(option),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium,
+                text = if (option.isAvailable) optionSizeLabel(option) else "Unavailable",
+                color = if (option.isAvailable) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
+                fontWeight = if (option.isAvailable) FontWeight.Medium else FontWeight.Bold,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            optionResolution(option)?.let {
-                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-            }
-            formatBitrate(option)?.let {
-                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-            }
-            if (!option.isAvailable) {
-                Text(
-                    text = "Unavailable",
-                    color = MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                )
-                option.unavailableReason?.let {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        fontSize = 11.sp,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
         }
     }
 }
