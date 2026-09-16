@@ -8,6 +8,7 @@ BrightFetch is an Android video-downloader MVP built with Kotlin, Jetpack Compos
 - Real multi-tab browsing with a tab switcher, independent page/navigation state, safe close behavior, and background WebView pausing.
 - Persistent browsing history and bookmarks, including reopen, remove, and clear actions.
 - Persistent browser settings for Google, DuckDuckGo, Bing, or Yahoo search; JavaScript; cookies; and desktop-site mode.
+- Focusable Google omnibox that clears its editing text without losing the active page, plus a current-page card with title, URL, Share, Copy, and Edit actions.
 - Browser page actions for refresh/stop, bookmark, share, copy URL, and opening the page in another browser.
 - Bottom navigation with Home, Downloading, and Videos tabs.
 - Thread-safe WebView media sniffing from network requests, download callbacks, dynamic HTML `video`/`source` elements, performance entries, and embedded media JSON.
@@ -20,7 +21,8 @@ BrightFetch is an Android video-downloader MVP built with Kotlin, Jetpack Compos
 - HLS child playlists requested by WebView are collapsed into one detected video; the format resolver expands the master into real quality choices so a segment or duplicate playlist is not presented as a separate video.
 - Direct HTTP(S) video downloads with foreground notifications, progress, cancellation, and Range-based resume.
 - VOD HLS (`.m3u8`) downloads preserve the exact quality selected by the user, including standard AES-128 playlists with a publicly accessible key, and package MPEG-TS streams into a validated MP4 with Media3 Transformer.
-- Public MediaStore library at `Internal storage/Movies/BrightFetch`, with real cached thumbnails, quality, resolution, duration, extension, file size, `dd/MM/yyyy` download date, playback through Android's system app chooser, share, and delete actions.
+- Public MediaStore library at `Internal storage/Movies/BrightFetch`, with real cached thumbnails, quality, resolution, duration, extension, file size, `dd/MM/yyyy` download date, share, and delete actions.
+- Immersive in-app video preview with controls hidden initially, tap-to-show overlay, audio, seek bar, ±5-second seeking, mute, speed, rotation, control lock, and automatic control hiding.
 - Output names are normalized to supported video extensions; non-video suffixes such as `.bin` or `.dat` are replaced from the detected MIME type.
 
 ## Safety and MVP limitations

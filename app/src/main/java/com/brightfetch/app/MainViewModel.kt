@@ -74,6 +74,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _videos = MutableStateFlow<List<DownloadedVideo>>(emptyList())
     val videos: StateFlow<List<DownloadedVideo>> = _videos.asStateFlow()
 
+    private val _playingVideo = MutableStateFlow<DownloadedVideo?>(null)
+    val playingVideo: StateFlow<DownloadedVideo?> = _playingVideo.asStateFlow()
+
     init {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
@@ -473,6 +476,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             PublicVideoStore.delete(getApplication(), video)
             refreshVideos()
         }
+    }
+
+    fun openVideoPlayer(video: DownloadedVideo) {
+        _playingVideo.value = video
+    }
+
+    fun closeVideoPlayer() {
+        _playingVideo.value = null
     }
 
     private suspend fun refreshDownloads() = withContext(Dispatchers.IO) {

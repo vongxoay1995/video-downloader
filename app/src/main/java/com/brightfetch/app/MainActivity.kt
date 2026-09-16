@@ -22,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +33,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.brightfetch.app.ui.BrowserScreen
 import com.brightfetch.app.ui.DownloadingScreen
+import com.brightfetch.app.ui.VideoPlayerScreen
 import com.brightfetch.app.ui.VideosScreen
 import com.brightfetch.app.ui.rememberBrowserState
 import com.brightfetch.app.ui.theme.BrightFetchTheme
@@ -82,12 +84,22 @@ private enum class AppTab(val label: String) {
 @Composable
 private fun BrightFetchApp(mainViewModel: MainViewModel = viewModel()) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    val playingVideo by mainViewModel.playingVideo.collectAsState()
     val browserState = rememberBrowserState()
 
     DisposableEffect(browserState) {
         onDispose {
             browserState.dispose()
         }
+    }
+
+    val selectedVideo = playingVideo
+    if (selectedVideo != null) {
+        VideoPlayerScreen(
+            video = selectedVideo,
+            onBack = mainViewModel::closeVideoPlayer,
+        )
+        return
     }
 
     Scaffold(
@@ -115,7 +127,10 @@ private fun BrightFetchApp(mainViewModel: MainViewModel = viewModel()) {
             when (AppTab.entries[selectedTab]) {
                 AppTab.HOME -> BrowserScreen(browserState, mainViewModel)
                 AppTab.DOWNLOADING -> DownloadingScreen(mainViewModel)
-                AppTab.VIDEOS -> VideosScreen(viewModel = mainViewModel)
+                AppTab.VIDEOS -> VideosScreen(
+                    viewModel = mainViewModel,
+                    onPlayVideo = mainViewModel::openVideoPlayer,
+                )
             }
         }
     }

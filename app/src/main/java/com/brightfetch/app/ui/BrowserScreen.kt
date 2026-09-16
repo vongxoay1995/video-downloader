@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
@@ -97,6 +98,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -341,9 +345,9 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                 state.home()
                 panel = BrowserPanel.NONE
             },
-            onSubmit = {
+            onSubmit = { rawInput ->
                 viewModel.clearCandidates()
-                state.navigate(state.address, settings.searchEngine)
+                state.navigate(rawInput, BrowserSearchEngine.GOOGLE)
                 panel = BrowserPanel.NONE
             },
             onNewTab = {
@@ -351,7 +355,8 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                 state.newTab()
                 panel = BrowserPanel.NONE
             },
-            searchEngineName = settings.searchEngine.displayName,
+            currentPageUrl = currentPageUrl,
+            currentPageTitle = state.pageTitle,
             isBookmarked = isBookmarked,
             onToggleBookmark = {
                 currentPageUrl?.let { url ->
@@ -852,9 +857,10 @@ private fun SettingsToggleRow(
 private fun BrowserTopBar(
     state: BrowserState,
     onHome: () -> Unit,
-    onSubmit: () -> Unit,
+    onSubmit: (String) -> Unit,
     onNewTab: () -> Unit,
-    searchEngineName: String,
+    currentPageUrl: String?,
+    currentPageTitle: String,
     isBookmarked: Boolean,
     onToggleBookmark: () -> Unit,
     onShowTabs: () -> Unit,
@@ -869,26 +875,46 @@ private fun BrowserTopBar(
     onClearDetected: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    var editorText by remember(state.currentTab.id) { mutableStateOf("") }
+    var editorHasFocus by remember(state.currentTab.id) { mutableStateOf(false) }
+    var editUrlOnNextFocus by remember(state.currentTab.id) { mutableStateOf<String?>(null) }
+    val editorFocusRequester = remember(state.currentTab.id) { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    val submitAndDismissKeyboard = {
-        focusManager.clearFocus(force = true)
-        keyboardController?.hide()
-        onSubmit()
+    val submitAndDismissKeyboard: () -> Unit = {
+        editorText.trim().takeIf(String::isNotBlank)?.let { input ->
+            focusManager.clearFocus(force = true)
+            keyboardController?.hide()
+            editorText = ""
+            onSubmit(input)
+        }
     }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
         IconButton(onClick = onHome) {
             Icon(Icons.Default.Home, contentDescription = "Home", tint = Ink)
         }
         OutlinedTextField(
-            value = state.address,
-            onValueChange = { state.address = it },
-            modifier = Modifier.weight(1f).height(54.dp),
+            value = if (editorHasFocus) editorText else currentPageUrl.orEmpty(),
+            onValueChange = { editorText = it },
+            modifier = Modifier
+                .weight(1f)
+                .height(54.dp)
+                .focusRequester(editorFocusRequester)
+                .onFocusChanged { focusState ->
+                    val gainedFocus = focusState.isFocused && !editorHasFocus
+                    editorHasFocus = focusState.isFocused
+                    if (gainedFocus) {
+                        // Only clear the local editor. The active page URL remains in BrowserState.
+                        editorText = editUrlOnNextFocus ?: ""
+                        editUrlOnNextFocus = null
+                    }
+                },
             singleLine = true,
-            placeholder = { Text("Search with $searchEngineName or enter URL", maxLines = 1) },
+            placeholder = { Text("Search Google or enter URL", maxLines = 1) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             shape = RoundedCornerShape(14.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
@@ -921,7 +947,7 @@ private fun BrowserTopBar(
                     leadingIcon = {
                         Icon(if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, contentDescription = null)
                     },
-                    enabled = isHttpUrl(state.address),
+                    enabled = currentPageUrl != null,
                     onClick = {
                         menuExpanded = false
                         onToggleBookmark()
@@ -969,7 +995,7 @@ private fun BrowserTopBar(
                 DropdownMenuItem(
                     text = { Text("Share page") },
                     leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                    enabled = isHttpUrl(state.address),
+                    enabled = currentPageUrl != null,
                     onClick = {
                         menuExpanded = false
                         onShare()
@@ -978,7 +1004,7 @@ private fun BrowserTopBar(
                 DropdownMenuItem(
                     text = { Text("Copy page URL") },
                     leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                    enabled = isHttpUrl(state.address),
+                    enabled = currentPageUrl != null,
                     onClick = {
                         menuExpanded = false
                         onCopy()
@@ -987,7 +1013,7 @@ private fun BrowserTopBar(
                 DropdownMenuItem(
                     text = { Text("Open in another browser") },
                     leadingIcon = { Icon(Icons.Default.OpenInBrowser, contentDescription = null) },
-                    enabled = isHttpUrl(state.address),
+                    enabled = currentPageUrl != null,
                     onClick = {
                         menuExpanded = false
                         onOpenExternal()
@@ -1016,6 +1042,77 @@ private fun BrowserTopBar(
                         onHome()
                     },
                 )
+            }
+        }
+        }
+        if (editorHasFocus && currentPageUrl != null) {
+            CurrentPageCard(
+                title = currentPageTitle,
+                url = currentPageUrl,
+                onShare = onShare,
+                onCopy = onCopy,
+                onEdit = {
+                    if (editorHasFocus) {
+                        editorText = currentPageUrl
+                        keyboardController?.show()
+                    } else {
+                        editUrlOnNextFocus = currentPageUrl
+                        editorFocusRequester.requestFocus()
+                        keyboardController?.show()
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun CurrentPageCard(
+    title: String,
+    url: String,
+    onShare: () -> Unit,
+    onCopy: () -> Unit,
+    onEdit: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 2.dp, top = 7.dp, bottom = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier.size(36.dp).background(MaterialTheme.colorScheme.surface, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(19.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title.ifBlank { titleFromUrl(url) },
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    url,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            IconButton(onClick = onShare) {
+                Icon(Icons.Default.Share, contentDescription = "Share current page")
+            }
+            IconButton(onClick = onCopy) {
+                Icon(Icons.Default.ContentCopy, contentDescription = "Copy current page URL")
+            }
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Default.Edit, contentDescription = "Edit current page URL")
             }
         }
     }

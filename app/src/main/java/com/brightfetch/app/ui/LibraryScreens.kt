@@ -1,6 +1,5 @@
 package com.brightfetch.app.ui
 
-import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
@@ -90,6 +89,7 @@ fun DownloadingScreen(viewModel: MainViewModel) {
 @Composable
 fun VideosScreen(
     viewModel: MainViewModel,
+    onPlayVideo: (DownloadedVideo) -> Unit,
 ) {
     val context = LocalContext.current
     val videos by viewModel.videos.collectAsState()
@@ -115,7 +115,7 @@ fun VideosScreen(
                 items(videos, key = { it.uri.toString() }) { video ->
                     VideoCard(
                         video = video,
-                        onPlay = { playVideo(context, video) },
+                        onPlay = { onPlayVideo(video) },
                         onShare = { shareVideo(context, video) },
                         onDelete = {
                             viewModel.deleteVideo(video)
@@ -216,6 +216,7 @@ private fun statusColor(state: WorkInfo.State): Color = when (state) {
 @Composable
 private fun VideoCard(video: DownloadedVideo, onPlay: () -> Unit, onShare: () -> Unit, onDelete: () -> Unit) {
     Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onPlay),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -395,29 +396,6 @@ private fun EmptyState(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-    }
-}
-
-private fun playVideo(context: Context, video: DownloadedVideo) {
-    runCatching {
-        val providerMimeType = runCatching {
-            context.contentResolver.getType(video.uri)
-        }.getOrNull()
-        val mimeType = sequenceOf(providerMimeType, video.mimeType)
-            .filterNotNull()
-            .map { it.substringBefore(';').trim() }
-            .firstOrNull { it.startsWith("video/", ignoreCase = true) && it.length > "video/".length }
-            ?: "video/*"
-        val viewIntent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndTypeAndNormalize(video.uri, mimeType)
-            clipData = ClipData.newRawUri(video.name, video.uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        val chooser = Intent.createChooser(viewIntent, "Play video with")
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        context.startActivity(chooser)
-    }.onFailure {
-        Toast.makeText(context, "Unable to play this video", Toast.LENGTH_SHORT).show()
     }
 }
 
