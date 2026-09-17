@@ -5,15 +5,15 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
-import android.media.AudioAttributes
-import android.media.AudioManager
-import android.media.MediaPlayer
-import android.widget.VideoView
+import android.util.Log
+import android.view.TextureView
+import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,7 +55,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +76,14 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
+import androidx.media3.exoplayer.ExoPlayer
 import com.brightfetch.app.model.DownloadedVideo
 import kotlinx.coroutines.delay
 import kotlin.math.max
@@ -87,24 +95,37 @@ fun VideoPlayerScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val hostView = LocalView.current
     val activity = remember(context) { context.findActivity() }
+    val originalOrientation = remember(activity) {
+        activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
 
     var retryGeneration by remember(video.uri) { mutableIntStateOf(0) }
     var isPrepared by remember(video.uri) { mutableStateOf(false) }
     var isPlaying by remember(video.uri) { mutableStateOf(false) }
     var isBuffering by remember(video.uri) { mutableStateOf(true) }
+    var hasRenderedFirstFrame by remember(video.uri) { mutableStateOf(false) }
     var errorMessage by remember(video.uri) { mutableStateOf<String?>(null) }
     var durationMillis by remember(video.uri) {
         mutableLongStateOf(video.durationMillis.coerceAtLeast(0L))
+    }
+    var videoAspectRatio by remember(video.uri) {
+        mutableFloatStateOf(
+            if (video.width > 0 && video.height > 0) {
+                video.width.toFloat() / video.height.toFloat()
+            } else {
+                16f / 9f
+            },
+        )
     }
     var positionMillis by remember(video.uri) { mutableLongStateOf(0L) }
     var isSeeking by remember(video.uri) { mutableStateOf(false) }
     var seekFraction by remember(video.uri) { mutableFloatStateOf(0f) }
     var resumeWhenForegrounded by remember(video.uri) { mutableStateOf(false) }
     var resumePositionMillis by remember(video.uri) { mutableLongStateOf(0L) }
-    var preparedPlayer by remember(video.uri) { mutableStateOf<MediaPlayer?>(null) }
 
     var controlsVisible by remember(video.uri) { mutableStateOf(false) }
     var controlInteraction by remember(video.uri) { mutableIntStateOf(0) }
@@ -112,19 +133,24 @@ fun VideoPlayerScreen(
     var isMuted by remember(video.uri) { mutableStateOf(false) }
     var playbackSpeed by remember(video.uri) { mutableFloatStateOf(1f) }
 
-    val currentMuted by rememberUpdatedState(isMuted)
-    val currentPlaybackSpeed by rememberUpdatedState(playbackSpeed)
-
-    val videoView = remember(video.uri) {
-        VideoView(context).apply {
+    val textureView = remember(video.uri) {
+        TextureView(context).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+            keepScreenOn = true
+        }
+    }
+    val player = remember(video.uri) {
+        ExoPlayer.Builder(context).build().apply {
             setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
                     .build(),
+                true,
             )
-            setAudioFocusRequest(AudioManager.AUDIOFOCUS_GAIN)
-            keepScreenOn = true
         }
     }
 
@@ -136,21 +162,16 @@ fun VideoPlayerScreen(
         val upperBound = if (durationMillis > 0L) durationMillis else Long.MAX_VALUE
         val target = targetMillis.coerceIn(0L, upperBound)
         positionMillis = target
-        runCatching { videoView.seekTo(target.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()) }
+        runCatching { player.seekTo(target) }
         markControlInteraction()
     }
 
-    fun applyAudioState(player: MediaPlayer?, muted: Boolean) {
-        runCatching {
-            val volume = if (muted) 0f else 1f
-            player?.setVolume(volume, volume)
-        }
+    fun applyAudioState(muted: Boolean) {
+        player.volume = if (muted) 0f else 1f
     }
 
-    fun applySpeed(player: MediaPlayer?, speed: Float) {
-        runCatching {
-            player?.playbackParams = player?.playbackParams?.setSpeed(speed) ?: return@runCatching
-        }
+    fun applySpeed(speed: Float) {
+        player.playbackParameters = PlaybackParameters(speed)
     }
 
     BackHandler(onBack = onBack)
@@ -164,6 +185,7 @@ fun VideoPlayerScreen(
         onDispose {
             controller?.show(WindowInsetsCompat.Type.systemBars())
             if (window != null) WindowCompat.setDecorFitsSystemWindows(window, true)
+            activity?.requestedOrientation = originalOrientation
         }
     }
 
@@ -184,80 +206,119 @@ fun VideoPlayerScreen(
         }
     }
 
-    DisposableEffect(videoView, video.uri) {
-        videoView.setOnPreparedListener { player ->
-            preparedPlayer = player
-            applyAudioState(player, currentMuted)
-            applySpeed(player, currentPlaybackSpeed)
-            durationMillis = player.duration.toLong().coerceAtLeast(0L)
-            isPrepared = true
-            isBuffering = false
-            errorMessage = null
-            isPlaying = true
-        }
-        videoView.setOnInfoListener { player, what, _ ->
-            when (what) {
-                MediaPlayer.MEDIA_INFO_BUFFERING_START -> isBuffering = true
-                MediaPlayer.MEDIA_INFO_BUFFERING_END,
-                MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START,
-                -> {
-                    applyAudioState(player, currentMuted)
-                    isBuffering = false
+    DisposableEffect(player, textureView, video.uri) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_BUFFERING -> isBuffering = true
+                    Player.STATE_READY -> {
+                        val playerDuration = player.duration
+                        if (playerDuration != C.TIME_UNSET && playerDuration > 0L) {
+                            durationMillis = playerDuration
+                        }
+                        isPrepared = true
+                        isBuffering = !hasRenderedFirstFrame
+                        errorMessage = null
+                    }
+                    Player.STATE_ENDED -> {
+                        isPlaying = false
+                        isBuffering = false
+                        positionMillis = durationMillis
+                        controlsVisible = true
+                        markControlInteraction()
+                    }
+                    Player.STATE_IDLE -> Unit
                 }
             }
-            true
+
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+                if (playing && hasRenderedFirstFrame) isBuffering = false
+            }
+
+            override fun onRenderedFirstFrame() {
+                hasRenderedFirstFrame = true
+                isBuffering = false
+                Log.i(PLAYER_LOG_TAG, "Rendered first video frame: ${video.displayPath}")
+            }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    videoAspectRatio =
+                        videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                isPrepared = false
+                isPlaying = false
+                isBuffering = false
+                hasRenderedFirstFrame = false
+                Log.e(
+                    PLAYER_LOG_TAG,
+                    "Video playback failed: uri=${video.uri} path=${video.displayPath}",
+                    error,
+                )
+                errorMessage = "Unable to play this video (${error.errorCodeName}). Tap Retry to try again."
+            }
         }
-        videoView.setOnCompletionListener {
-            isPlaying = false
-            isBuffering = false
-            positionMillis = durationMillis
-            controlsVisible = true
-            markControlInteraction()
-        }
-        videoView.setOnErrorListener { _, what, extra ->
-            preparedPlayer = null
-            isPrepared = false
-            isPlaying = false
-            isBuffering = false
-            errorMessage = mediaErrorMessage(what, extra)
-            true
-        }
+        player.addListener(listener)
+        player.setVideoTextureView(textureView)
         onDispose {
             resumeWhenForegrounded = false
-            preparedPlayer = null
-            videoView.keepScreenOn = false
-            videoView.setOnPreparedListener(null)
-            videoView.setOnInfoListener(null)
-            videoView.setOnCompletionListener(null)
-            videoView.setOnErrorListener(null)
-            runCatching { videoView.stopPlayback() }
+            textureView.keepScreenOn = false
+            player.clearVideoTextureView(textureView)
+            player.removeListener(listener)
+            player.release()
         }
     }
 
-    LaunchedEffect(video.uri, retryGeneration) {
+    LaunchedEffect(player, video.uri, retryGeneration) {
         errorMessage = null
         isPrepared = false
         isPlaying = false
         isBuffering = true
+        hasRenderedFirstFrame = false
         positionMillis = 0L
         runCatching {
-            videoView.stopPlayback()
-            videoView.setVideoURI(video.uri)
-            videoView.requestFocus()
-            videoView.start()
+            player.stop()
+            player.clearMediaItems()
+            applyAudioState(isMuted)
+            applySpeed(playbackSpeed)
+            player.setMediaItem(MediaItem.fromUri(video.uri))
+            player.prepare()
+            player.playWhenReady = true
         }.onFailure { error ->
             isBuffering = false
             errorMessage = error.message ?: "Unable to open this video."
         }
     }
 
+    // STATE_READY can be reached from the audio track alone. Do not silently accept an
+    // audio-only black screen as successful video playback.
+    LaunchedEffect(isPrepared, hasRenderedFirstFrame, errorMessage, retryGeneration) {
+        if (isPrepared && !hasRenderedFirstFrame && errorMessage == null) {
+            delay(10_000L)
+            if (isPrepared && !hasRenderedFirstFrame && errorMessage == null) {
+                runCatching { player.pause() }
+                isPlaying = false
+                isBuffering = false
+                Log.e(
+                    PLAYER_LOG_TAG,
+                    "No video frame rendered: uri=${video.uri} path=${video.displayPath}",
+                )
+                errorMessage =
+                    "Audio started, but no video frame could be rendered. Tap Retry to try again."
+            }
+        }
+    }
+
     // A corrupt or unreadable local item must not leave the UI spinning forever.
     LaunchedEffect(isBuffering, errorMessage, retryGeneration) {
-        if (isBuffering && errorMessage == null) {
+        if (!isPrepared && isBuffering && errorMessage == null) {
             delay(15_000L)
-            if (isBuffering && !isPlaying && errorMessage == null) {
-                runCatching { videoView.stopPlayback() }
-                preparedPlayer = null
+            if (!isPrepared && isBuffering && !isPlaying && errorMessage == null) {
+                runCatching { player.stop() }
                 isPrepared = false
                 isBuffering = false
                 errorMessage = "The video took too long to open. Tap Retry to try again."
@@ -265,38 +326,39 @@ fun VideoPlayerScreen(
         }
     }
 
-    LaunchedEffect(videoView, isPrepared) {
+    LaunchedEffect(player, isPrepared) {
         while (isPrepared) {
             runCatching {
-                if (!isSeeking) positionMillis = videoView.currentPosition.toLong().coerceAtLeast(0L)
-                isPlaying = videoView.isPlaying
+                if (!isSeeking) positionMillis = player.currentPosition.coerceAtLeast(0L)
+                val playerDuration = player.duration
+                if (playerDuration != C.TIME_UNSET && playerDuration > 0L) {
+                    durationMillis = playerDuration
+                }
+                isPlaying = player.isPlaying
             }
             delay(300L)
         }
     }
 
-    DisposableEffect(lifecycleOwner, videoView, isPrepared) {
+    DisposableEffect(lifecycleOwner, player, isPrepared) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE,
                 Lifecycle.Event.ON_STOP,
                 -> if (isPrepared) {
                     resumeWhenForegrounded = resumeWhenForegrounded ||
-                        runCatching { videoView.isPlaying }.getOrDefault(false)
-                    resumePositionMillis = runCatching {
-                        videoView.currentPosition.toLong()
-                    }.getOrDefault(positionMillis)
-                    runCatching { videoView.pause() }
+                        runCatching { player.isPlaying }.getOrDefault(false)
+                    resumePositionMillis = runCatching { player.currentPosition }
+                        .getOrDefault(positionMillis)
+                    runCatching { player.pause() }
                     isPlaying = false
                 }
                 Lifecycle.Event.ON_RESUME -> if (isPrepared && resumeWhenForegrounded) {
                     runCatching {
-                        applyAudioState(preparedPlayer, isMuted)
-                        applySpeed(preparedPlayer, playbackSpeed)
-                        videoView.seekTo(
-                            resumePositionMillis.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
-                        )
-                        videoView.start()
+                        applyAudioState(isMuted)
+                        applySpeed(playbackSpeed)
+                        player.seekTo(resumePositionMillis)
+                        player.play()
                     }.onSuccess {
                         isPlaying = true
                         resumeWhenForegrounded = false
@@ -316,8 +378,10 @@ fun VideoPlayerScreen(
         contentAlignment = Alignment.Center,
     ) {
         AndroidView(
-            factory = { videoView },
-            modifier = Modifier.fillMaxSize(),
+            factory = { textureView },
+            modifier = Modifier
+                .aspectRatio(videoAspectRatio)
+                .fillMaxSize(),
         )
 
         Box(
@@ -386,13 +450,12 @@ fun VideoPlayerScreen(
                     onBack = onBack,
                     onMute = {
                         isMuted = !isMuted
-                        applyAudioState(preparedPlayer, isMuted)
+                        applyAudioState(isMuted)
                         markControlInteraction()
                     },
                     onRotate = {
                         activity?.requestedOrientation =
-                            if (context.resources.configuration.orientation ==
-                                Configuration.ORIENTATION_LANDSCAPE
+                            if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
                             ) {
                                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
                             } else {
@@ -402,7 +465,7 @@ fun VideoPlayerScreen(
                     },
                     onSpeed = {
                         playbackSpeed = nextPlaybackSpeed(playbackSpeed)
-                        applySpeed(preparedPlayer, playbackSpeed)
+                        applySpeed(playbackSpeed)
                         markControlInteraction()
                     },
                     onSeekChanged = { fraction ->
@@ -417,16 +480,16 @@ fun VideoPlayerScreen(
                     onRewind = { seekTo(positionMillis - 5_000L) },
                     onForward = { seekTo(positionMillis + 5_000L) },
                     onPlayPause = {
-                        if (videoView.isPlaying) {
-                            videoView.pause()
+                        if (player.isPlaying) {
+                            player.pause()
                             isPlaying = false
                         } else {
-                            applyAudioState(preparedPlayer, isMuted)
-                            applySpeed(preparedPlayer, playbackSpeed)
+                            applyAudioState(isMuted)
+                            applySpeed(playbackSpeed)
                             if (durationMillis > 0L && positionMillis >= durationMillis - 500L) {
                                 seekTo(0L)
                             }
-                            videoView.start()
+                            player.play()
                             isPlaying = true
                         }
                         markControlInteraction()
@@ -698,17 +761,4 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-private fun mediaErrorMessage(what: Int, extra: Int): String {
-    val reason = when (extra) {
-        MediaPlayer.MEDIA_ERROR_IO -> "The video could not be read from storage."
-        MediaPlayer.MEDIA_ERROR_MALFORMED -> "The video file is malformed."
-        MediaPlayer.MEDIA_ERROR_UNSUPPORTED -> "This device does not support the video's codec."
-        MediaPlayer.MEDIA_ERROR_TIMED_OUT -> "The player timed out while opening the video."
-        else -> if (what == MediaPlayer.MEDIA_ERROR_SERVER_DIED) {
-            "The system media service stopped unexpectedly."
-        } else {
-            "The video could not be played."
-        }
-    }
-    return "$reason Tap Retry to try again."
-}
+private const val PLAYER_LOG_TAG = "BrightFetchPlayer"
