@@ -1,6 +1,7 @@
 package com.brightfetch.app.ui
 
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -9,6 +10,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.format.DateUtils
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -117,8 +119,10 @@ import com.brightfetch.app.MainViewModel
 import com.brightfetch.app.browser.BrowserBookmark
 import com.brightfetch.app.browser.BrowserHistoryEntry
 import com.brightfetch.app.browser.BrowserNavigation
+import com.brightfetch.app.browser.BrowserPlatformPolicy
 import com.brightfetch.app.browser.BrowserSearchEngine
 import com.brightfetch.app.browser.BrowserSettings
+import com.brightfetch.app.browser.ExternalBrowserApp
 import com.brightfetch.app.browser.MediaSniffer
 import com.brightfetch.app.model.MediaFormatInspectionState
 import com.brightfetch.app.ui.theme.Ink
@@ -139,6 +143,8 @@ internal class BrowserTabState(val id: Long = nextBrowserTabId()) {
     internal var appliedDesktopMode: Boolean? = null
     internal var appliedJavaScript: Boolean? = null
     internal var needsMediaRescan: Boolean = false
+    internal var pendingExternalApp: ExternalBrowserApp? = null
+    internal var pendingExternalAppGestureAt: Long = 0L
 }
 
 class BrowserState {
@@ -307,6 +313,7 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
     val settings by viewModel.browserSettings.collectAsState()
     var panel by remember { mutableStateOf(BrowserPanel.NONE) }
     val currentPageUrl = state.address.takeIf(::isHttpUrl)
+    val unsupportedDownloadPlatform = BrowserPlatformPolicy.unsupportedDownloadFor(currentPageUrl)
     val isBookmarked = currentPageUrl != null && bookmarks.any { it.url == currentPageUrl }
 
     LaunchedEffect(settings) {
@@ -463,7 +470,33 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                 }
             }
         }
-        if (panel == BrowserPanel.NONE && isResolvingPage) {
+        if (panel == BrowserPanel.NONE && unsupportedDownloadPlatform != null) {
+            val disabledColor = Color(0xFF777A7F)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .height(56.dp)
+                    .background(Color(0xFFE1E2E5), RoundedCornerShape(18.dp))
+                    .clickable {
+                        Toast.makeText(
+                            context,
+                            unsupportedDownloadPlatform.message,
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    },
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Default.Download,
+                    contentDescription = "Download unavailable on ${unsupportedDownloadPlatform.displayName}",
+                    tint = disabledColor,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Download video", color = disabledColor)
+            }
+        } else if (panel == BrowserPanel.NONE && isResolvingPage) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1361,27 +1394,7 @@ private fun BrowserPage(
                     }
 
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                        val target = request?.url ?: return false
-                        return when (target.scheme?.lowercase()) {
-                            "http", "https" -> false
-                            "intent" -> {
-                                val fallback = runCatching {
-                                    Intent.parseUri(target.toString(), Intent.URI_INTENT_SCHEME)
-                                        .getStringExtra("browser_fallback_url")
-                                }.getOrNull()
-                                if (fallback?.startsWith("http", ignoreCase = true) == true) {
-                                    view?.loadUrl(fallback)
-                                }
-                                true
-                            }
-                            "tel", "mailto", "sms", "smsto" -> {
-                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, target)) }
-                                true
-                            }
-                            // Keep app-specific deep links (tiktok:, snssdk:, market:, etc.)
-                            // from taking the user out of the downloader browser.
-                            else -> true
-                        }
+                        return handleExternalNavigation(context, view, request, tab)
                     }
                 }
                 setDownloadListener(DownloadListener { downloadUrl, userAgent, disposition, mimeType, _ ->
@@ -1409,6 +1422,168 @@ private fun BrowserPage(
             }
         },
     )
+}
+
+private fun handleExternalNavigation(
+    context: Context,
+    webView: WebView?,
+    request: WebResourceRequest?,
+    tab: BrowserTabState,
+): Boolean {
+    val target = request?.url ?: return false
+    val scheme = target.scheme?.lowercase() ?: return true
+    val isMainFrame = request.isForMainFrame
+    val now = SystemClock.elapsedRealtime()
+    val hasDirectGesture = isMainFrame && request.hasGesture()
+
+    if (scheme == "http" || scheme == "https") {
+        if (hasDirectGesture) {
+            // A same-platform HTTPS click may immediately redirect to intent:/a custom scheme.
+            // Keep one short-lived, platform-scoped token for that single redirect only.
+            tab.pendingExternalApp = BrowserPlatformPolicy.externalAppForWebUrl(target.toString())
+                ?: BrowserPlatformPolicy.externalAppForWebUrl(webView?.url)
+            tab.pendingExternalAppGestureAt = if (tab.pendingExternalApp != null) now else 0L
+        }
+        val app = if (hasDirectGesture) {
+            BrowserPlatformPolicy.explicitWebAppLink(target.toString())
+        } else null
+        val opened = app != null && openKnownApp(context, app, target.toString())
+        if (opened) clearPendingExternalApp(tab)
+        return opened
+    }
+
+    if (!isMainFrame) return true
+    val pendingApp = tab.pendingExternalApp.takeIf {
+        tab.pendingExternalAppGestureAt > 0L &&
+            now - tab.pendingExternalAppGestureAt in 0L..EXTERNAL_GESTURE_WINDOW_MILLIS
+    }
+    if (pendingApp == null && !hasDirectGesture) clearPendingExternalApp(tab)
+
+    if (scheme == "intent") {
+        val parsed = parseExternalIntent(target.toString())
+        val allowed = hasDirectGesture || (parsed?.app != null && parsed.app == pendingApp)
+        if (!allowed) return true
+        clearPendingExternalApp(tab)
+        return handleIntentUrl(context, webView, parsed)
+    }
+
+    BrowserPlatformPolicy.externalAppForScheme(scheme)?.let { app ->
+        if (!hasDirectGesture && pendingApp != app) return true
+        clearPendingExternalApp(tab)
+        if (!openKnownApp(context, app, target.toString())) {
+            showCannotOpenApp(context, app)
+        }
+        return true
+    }
+
+    if (hasDirectGesture && scheme in SAFE_GENERIC_EXTERNAL_SCHEMES) {
+        clearPendingExternalApp(tab)
+        val opened = tryStartExternalActivity(
+            context,
+            Intent(Intent.ACTION_VIEW, target).apply {
+                addCategory(Intent.CATEGORY_BROWSABLE)
+            },
+        )
+        if (!opened) {
+            Toast.makeText(context, "No app can open this link.", Toast.LENGTH_SHORT).show()
+        }
+        return true
+    }
+
+    // javascript:, file:, content:, data:, blob: and unknown schemes are deliberately blocked.
+    return true
+}
+
+private data class ParsedExternalIntent(
+    val app: ExternalBrowserApp?,
+    val targetUrl: String?,
+    val fallbackUrl: String?,
+    val preferredPackage: String?,
+)
+
+private fun parseExternalIntent(rawUrl: String): ParsedExternalIntent? {
+    val parsed = runCatching { Intent.parseUri(rawUrl, Intent.URI_INTENT_SCHEME) }.getOrNull()
+        ?: return null
+    val fallback = BrowserPlatformPolicy.safeHttpUrl(
+        parsed.getStringExtra("browser_fallback_url"),
+    )
+    val targetUrl = parsed.dataString?.takeIf(String::isNotBlank) ?: fallback
+    val app = BrowserPlatformPolicy.externalAppForPackage(parsed.`package`)
+        ?: BrowserPlatformPolicy.externalAppForScheme(parsed.data?.scheme)
+        ?: BrowserPlatformPolicy.externalAppForWebUrl(targetUrl)
+    val preferredPackage = parsed.`package`
+        ?.takeIf { requested -> app?.packageNames?.any(requested::equals) == true }
+    return ParsedExternalIntent(app, targetUrl, fallback, preferredPackage)
+}
+
+private fun handleIntentUrl(
+    context: Context,
+    webView: WebView?,
+    parsed: ParsedExternalIntent?,
+): Boolean {
+    if (parsed == null) {
+        Toast.makeText(context, "This app link is invalid.", Toast.LENGTH_SHORT).show()
+        return true
+    }
+
+    if (parsed.app != null && parsed.targetUrl != null) {
+        if (openKnownApp(context, parsed.app, parsed.targetUrl, parsed.preferredPackage)) return true
+    }
+
+    if (parsed.fallbackUrl != null && webView != null) {
+        webView.loadUrl(parsed.fallbackUrl)
+    } else if (parsed.app != null) {
+        showCannotOpenApp(context, parsed.app)
+    } else {
+        Toast.makeText(context, "This external app link isn't supported.", Toast.LENGTH_SHORT).show()
+    }
+    return true
+}
+
+private fun clearPendingExternalApp(tab: BrowserTabState) {
+    tab.pendingExternalApp = null
+    tab.pendingExternalAppGestureAt = 0L
+}
+
+private fun openKnownApp(
+    context: Context,
+    app: ExternalBrowserApp,
+    rawUrl: String,
+    preferredPackage: String? = null,
+): Boolean {
+    if (!BrowserPlatformPolicy.isSafeTargetFor(app, rawUrl)) return false
+    val uri = runCatching { Uri.parse(rawUrl) }.getOrNull() ?: return false
+    val packageOrder = buildList {
+        preferredPackage?.takeIf { it in app.packageNames }?.let(::add)
+        app.packageNames.forEach { if (it !in this) add(it) }
+    }
+    return packageOrder.any { packageName ->
+        tryStartExternalActivity(
+            context,
+            Intent(Intent.ACTION_VIEW, uri).apply {
+                addCategory(Intent.CATEGORY_BROWSABLE)
+                setPackage(packageName)
+            },
+        )
+    }
+}
+
+private fun tryStartExternalActivity(context: Context, intent: Intent): Boolean = try {
+    if (context !is android.app.Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    context.startActivity(intent)
+    true
+} catch (_: ActivityNotFoundException) {
+    false
+} catch (_: SecurityException) {
+    false
+}
+
+private fun showCannotOpenApp(context: Context, app: ExternalBrowserApp) {
+    Toast.makeText(
+        context,
+        "${app.displayName} isn't installed or can't open this link.",
+        Toast.LENGTH_LONG,
+    ).show()
 }
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -1637,6 +1812,17 @@ private class MediaJavascriptBridge(private val reporter: BrowserMediaReporter) 
 }
 
 private const val MEDIA_BRIDGE_NAME = "BrightFetchMedia"
+
+private const val EXTERNAL_GESTURE_WINDOW_MILLIS = 2_500L
+
+private val SAFE_GENERIC_EXTERNAL_SCHEMES = setOf(
+    "tel",
+    "mailto",
+    "sms",
+    "smsto",
+    "geo",
+    "market",
+)
 
 private const val DESKTOP_USER_AGENT =
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +

@@ -14,6 +14,7 @@ import com.brightfetch.app.browser.BrowserHistoryEntry
 import com.brightfetch.app.browser.BrowserRepository
 import com.brightfetch.app.browser.BrowserSearchEngine
 import com.brightfetch.app.browser.BrowserSettings
+import com.brightfetch.app.browser.BrowserPlatformPolicy
 import com.brightfetch.app.browser.MediaUrlClassifier
 import com.brightfetch.app.browser.MediaFormatResolver
 import com.brightfetch.app.browser.News24hPageResolver
@@ -91,6 +92,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addCandidate(candidate: MediaCandidate) {
+        if (BrowserPlatformPolicy.unsupportedDownloadFor(candidate.pageUrl) != null) return
         if (MediaUrlClassifier.isLikelyAudio(candidate.url)) return
         if (BuildConfig.DEBUG) {
             Log.d(
