@@ -12,7 +12,9 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.text.format.DateUtils
+import android.view.MotionEvent
 import android.view.ViewGroup
+import android.view.ViewConfiguration
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.JavascriptInterface
@@ -124,10 +126,12 @@ import com.brightfetch.app.browser.BrowserSearchEngine
 import com.brightfetch.app.browser.BrowserSettings
 import com.brightfetch.app.browser.ExternalBrowserApp
 import com.brightfetch.app.browser.MediaSniffer
+import com.brightfetch.app.browser.StoreInstallRequest
 import com.brightfetch.app.model.MediaFormatInspectionState
 import com.brightfetch.app.ui.theme.Ink
 import com.brightfetch.app.ui.theme.SunnyYellow
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.abs
 
 internal class BrowserTabState(val id: Long = nextBrowserTabId()) {
     var address by mutableStateOf("")
@@ -145,6 +149,10 @@ internal class BrowserTabState(val id: Long = nextBrowserTabId()) {
     internal var needsMediaRescan: Boolean = false
     internal var pendingExternalApp: ExternalBrowserApp? = null
     internal var pendingExternalAppGestureAt: Long = 0L
+    internal var externalTapDownAt: Long = 0L
+    internal var externalTapDownX: Float = 0f
+    internal var externalTapDownY: Float = 0f
+    internal var externalTapCancelled: Boolean = false
 }
 
 class BrowserState {
@@ -1277,7 +1285,7 @@ private fun SearchEngineButton(mark: String, label: String, color: Color, onClic
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
+@SuppressLint("SetJavaScriptEnabled", "JavascriptInterface", "ClickableViewAccessibility")
 @Composable
 private fun BrowserPage(
     state: BrowserState,
@@ -1337,6 +1345,10 @@ private fun BrowserPage(
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, browserSettings.cookiesEnabled)
                 reporter.updateContext(userAgent = settings.userAgentString)
                 addJavascriptInterface(MediaJavascriptBridge(reporter), MEDIA_BRIDGE_NAME)
+                setOnTouchListener { touchedView, event ->
+                    recordExternalAppTap(tab, touchedView as WebView, event)
+                    false
+                }
 
                 webChromeClient = object : WebChromeClient() {
                     override fun onProgressChanged(view: WebView?, newProgress: Int) {
@@ -1435,28 +1447,40 @@ private fun handleExternalNavigation(
     val isMainFrame = request.isForMainFrame
     val now = SystemClock.elapsedRealtime()
     val hasDirectGesture = isMainFrame && request.hasGesture()
+    var pendingApp = activePendingExternalApp(tab, now)
 
     if (scheme == "http" || scheme == "https") {
+        if (!isMainFrame) return false
         if (hasDirectGesture) {
             // A same-platform HTTPS click may immediately redirect to intent:/a custom scheme.
             // Keep one short-lived, platform-scoped token for that single redirect only.
-            tab.pendingExternalApp = BrowserPlatformPolicy.externalAppForWebUrl(target.toString())
+            val gestureApp = BrowserPlatformPolicy.externalAppForWebUrl(target.toString())
                 ?: BrowserPlatformPolicy.externalAppForWebUrl(webView?.url)
-            tab.pendingExternalAppGestureAt = if (tab.pendingExternalApp != null) now else 0L
+            rememberExternalAppGesture(tab, gestureApp, now)
+            pendingApp = activePendingExternalApp(tab, now)
         }
-        val app = if (hasDirectGesture) {
-            BrowserPlatformPolicy.explicitWebAppLink(target.toString())
-        } else null
-        val opened = app != null && openKnownApp(context, app, target.toString())
-        if (opened) clearPendingExternalApp(tab)
-        return opened
+
+        BrowserPlatformPolicy.externalAppLinkRequest(target.toString())?.let { appLink ->
+            if (hasDirectGesture || pendingApp == appLink.app) {
+                clearPendingExternalApp(tab)
+                if (openKnownApp(context, appLink.app, appLink.targetUrl)) return true
+                // No matching app is installed. Preserve the normal web fallback.
+                return false
+            }
+        }
+
+        BrowserPlatformPolicy.storeInstallRequest(target.toString())?.let { installRequest ->
+            if (hasDirectGesture || pendingApp == installRequest.app) {
+                clearPendingExternalApp(tab)
+                if (openInstalledAppBeforeStore(context, webView, installRequest)) return true
+                // Only show the store page when no allowlisted installed app can be opened.
+                return false
+            }
+        }
+        return false
     }
 
     if (!isMainFrame) return true
-    val pendingApp = tab.pendingExternalApp.takeIf {
-        tab.pendingExternalAppGestureAt > 0L &&
-            now - tab.pendingExternalAppGestureAt in 0L..EXTERNAL_GESTURE_WINDOW_MILLIS
-    }
     if (pendingApp == null && !hasDirectGesture) clearPendingExternalApp(tab)
 
     if (scheme == "intent") {
@@ -1465,6 +1489,22 @@ private fun handleExternalNavigation(
         if (!allowed) return true
         clearPendingExternalApp(tab)
         return handleIntentUrl(context, webView, parsed)
+    }
+
+    BrowserPlatformPolicy.storeInstallRequest(target.toString())?.let { installRequest ->
+        if (!hasDirectGesture && pendingApp != installRequest.app) return true
+        clearPendingExternalApp(tab)
+        if (openInstalledAppBeforeStore(context, webView, installRequest)) return true
+        val storeOpened = tryStartExternalActivity(
+            context,
+            Intent(Intent.ACTION_VIEW, target).apply {
+                addCategory(Intent.CATEGORY_BROWSABLE)
+            },
+        )
+        if (!storeOpened) {
+            Toast.makeText(context, "No app can open this store link.", Toast.LENGTH_SHORT).show()
+        }
+        return true
     }
 
     BrowserPlatformPolicy.externalAppForScheme(scheme)?.let { app ->
@@ -1508,11 +1548,23 @@ private fun parseExternalIntent(rawUrl: String): ParsedExternalIntent? {
         parsed.getStringExtra("browser_fallback_url"),
     )
     val targetUrl = parsed.dataString?.takeIf(String::isNotBlank) ?: fallback
-    val app = BrowserPlatformPolicy.externalAppForPackage(parsed.`package`)
-        ?: BrowserPlatformPolicy.externalAppForScheme(parsed.data?.scheme)
-        ?: BrowserPlatformPolicy.externalAppForWebUrl(targetUrl)
-    val preferredPackage = parsed.`package`
-        ?.takeIf { requested -> app?.packageNames?.any(requested::equals) == true }
+    val targetStore = BrowserPlatformPolicy.storeInstallRequest(targetUrl)
+    val fallbackStore = BrowserPlatformPolicy.storeInstallRequest(fallback)
+    val appEvidence = listOfNotNull(
+        BrowserPlatformPolicy.externalAppForPackage(parsed.`package`),
+        BrowserPlatformPolicy.externalAppForScheme(parsed.data?.scheme),
+        BrowserPlatformPolicy.externalAppForWebUrl(targetUrl),
+        targetStore?.app,
+        fallbackStore?.app,
+    ).distinct()
+    if (appEvidence.size > 1) return null
+    val app = appEvidence.singleOrNull()
+    val requestedPackage = parsed.`package`
+        ?.takeIf { requested -> app?.packageNames?.any { it.equals(requested, true) } == true }
+        ?: targetStore?.requestedPackage
+        ?: fallbackStore?.requestedPackage
+    val preferredPackage = requestedPackage
+        ?.takeIf { requested -> app?.packageNames?.any { it.equals(requested, true) } == true }
     return ParsedExternalIntent(app, targetUrl, fallback, preferredPackage)
 }
 
@@ -1526,12 +1578,38 @@ private fun handleIntentUrl(
         return true
     }
 
-    if (parsed.app != null && parsed.targetUrl != null) {
-        if (openKnownApp(context, parsed.app, parsed.targetUrl, parsed.preferredPackage)) return true
+    if (parsed.app != null) {
+        val safeTarget = listOfNotNull(parsed.targetUrl, webView?.url)
+            .distinct()
+            .firstOrNull { BrowserPlatformPolicy.isSafeTargetFor(parsed.app, it) }
+        if (safeTarget != null) {
+            if (openKnownApp(
+                    context,
+                    parsed.app,
+                    safeTarget,
+                    parsed.preferredPackage,
+                )
+            ) {
+                return true
+            }
+        } else if (openKnownInstalledApp(context, parsed.app, parsed.preferredPackage)) {
+            return true
+        }
     }
 
     if (parsed.fallbackUrl != null && webView != null) {
         webView.loadUrl(parsed.fallbackUrl)
+    } else if (BrowserPlatformPolicy.storeInstallRequest(parsed.targetUrl) != null) {
+        val storeUri = runCatching { Uri.parse(parsed.targetUrl) }.getOrNull()
+        if (storeUri == null || !tryStartExternalActivity(
+                context,
+                Intent(Intent.ACTION_VIEW, storeUri).apply {
+                    addCategory(Intent.CATEGORY_BROWSABLE)
+                },
+            )
+        ) {
+            Toast.makeText(context, "No app can open this store link.", Toast.LENGTH_SHORT).show()
+        }
     } else if (parsed.app != null) {
         showCannotOpenApp(context, parsed.app)
     } else {
@@ -1543,6 +1621,98 @@ private fun handleIntentUrl(
 private fun clearPendingExternalApp(tab: BrowserTabState) {
     tab.pendingExternalApp = null
     tab.pendingExternalAppGestureAt = 0L
+}
+
+private fun rememberExternalAppGesture(
+    tab: BrowserTabState,
+    app: ExternalBrowserApp?,
+    atMillis: Long,
+) {
+    tab.pendingExternalApp = app
+    tab.pendingExternalAppGestureAt = if (app != null) atMillis else 0L
+}
+
+private fun activePendingExternalApp(
+    tab: BrowserTabState,
+    now: Long,
+): ExternalBrowserApp? {
+    val app = tab.pendingExternalApp
+    val isActive = app != null &&
+        tab.pendingExternalAppGestureAt > 0L &&
+        now - tab.pendingExternalAppGestureAt in 0L..EXTERNAL_GESTURE_WINDOW_MILLIS
+    if (!isActive) clearPendingExternalApp(tab)
+    return app.takeIf { isActive }
+}
+
+private fun recordExternalAppTap(
+    tab: BrowserTabState,
+    webView: WebView,
+    event: MotionEvent,
+) {
+    when (event.actionMasked) {
+        MotionEvent.ACTION_DOWN -> {
+            tab.externalTapDownAt = SystemClock.elapsedRealtime()
+            tab.externalTapDownX = event.x
+            tab.externalTapDownY = event.y
+            tab.externalTapCancelled = false
+        }
+        MotionEvent.ACTION_MOVE -> {
+            val touchSlop = ViewConfiguration.get(webView.context).scaledTouchSlop.toFloat()
+            if (
+                abs(event.x - tab.externalTapDownX) > touchSlop ||
+                abs(event.y - tab.externalTapDownY) > touchSlop
+            ) {
+                tab.externalTapCancelled = true
+            }
+        }
+        MotionEvent.ACTION_UP -> {
+            val now = SystemClock.elapsedRealtime()
+            val touchSlop = ViewConfiguration.get(webView.context).scaledTouchSlop.toFloat()
+            val isTap = tab.externalTapDownAt > 0L &&
+                !tab.externalTapCancelled &&
+                now - tab.externalTapDownAt in 0L..EXTERNAL_TAP_MAX_DURATION_MILLIS &&
+                abs(event.x - tab.externalTapDownX) <= touchSlop &&
+                abs(event.y - tab.externalTapDownY) <= touchSlop
+            if (isTap) {
+                // WebResourceRequest.hasGesture() is not reliable for JS-driven links. This
+                // token is still tied to a real tap, one platform, one main-frame launch,
+                // and a short expiry window.
+                rememberExternalAppGesture(
+                    tab,
+                    BrowserPlatformPolicy.externalAppForWebUrl(webView.url),
+                    now,
+                )
+            }
+            tab.externalTapDownAt = 0L
+            tab.externalTapCancelled = false
+        }
+        MotionEvent.ACTION_POINTER_DOWN -> tab.externalTapCancelled = true
+        MotionEvent.ACTION_CANCEL -> {
+            tab.externalTapDownAt = 0L
+            tab.externalTapCancelled = false
+        }
+    }
+}
+
+private fun openInstalledAppBeforeStore(
+    context: Context,
+    webView: WebView?,
+    installRequest: StoreInstallRequest,
+): Boolean {
+    val currentPage = webView?.url
+    if (BrowserPlatformPolicy.isSafeTargetFor(installRequest.app, currentPage)) {
+        return openKnownApp(
+            context,
+            installRequest.app,
+            currentPage.orEmpty(),
+            installRequest.requestedPackage,
+        )
+    }
+    return openKnownInstalledApp(
+        context,
+        installRequest.app,
+        installRequest.requestedPackage,
+    )
 }
 
 private fun openKnownApp(
@@ -1557,7 +1727,7 @@ private fun openKnownApp(
         preferredPackage?.takeIf { it in app.packageNames }?.let(::add)
         app.packageNames.forEach { if (it !in this) add(it) }
     }
-    return packageOrder.any { packageName ->
+    val openedDeepLink = packageOrder.any { packageName ->
         tryStartExternalActivity(
             context,
             Intent(Intent.ACTION_VIEW, uri).apply {
@@ -1565,6 +1735,26 @@ private fun openKnownApp(
                 setPackage(packageName)
             },
         )
+    }
+    return openedDeepLink || openKnownInstalledApp(context, app, preferredPackage)
+}
+
+private fun openKnownInstalledApp(
+    context: Context,
+    app: ExternalBrowserApp,
+    preferredPackage: String? = null,
+): Boolean {
+    val packageOrder = buildList {
+        app.packageNames.firstOrNull { it.equals(preferredPackage, true) }?.let(::add)
+        app.packageNames.forEach { if (it !in this) add(it) }
+    }
+    return packageOrder.any { packageName ->
+        val launchIntent = try {
+            context.packageManager.getLaunchIntentForPackage(packageName)
+        } catch (_: SecurityException) {
+            null
+        } ?: return@any false
+        tryStartExternalActivity(context, launchIntent)
     }
 }
 
@@ -1814,6 +2004,7 @@ private class MediaJavascriptBridge(private val reporter: BrowserMediaReporter) 
 private const val MEDIA_BRIDGE_NAME = "BrightFetchMedia"
 
 private const val EXTERNAL_GESTURE_WINDOW_MILLIS = 2_500L
+private const val EXTERNAL_TAP_MAX_DURATION_MILLIS = 1_200L
 
 private val SAFE_GENERIC_EXTERNAL_SCHEMES = setOf(
     "tel",

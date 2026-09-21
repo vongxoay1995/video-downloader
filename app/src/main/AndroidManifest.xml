@@ -15,6 +15,8 @@
         <package android:name="com.zhiliaoapp.musically" />
         <package android:name="com.ss.android.ugc.trill" />
         <package android:name="com.zhiliaoapp.musically.go" />
+        <package android:name="com.ss.android.ugc.tiktok.lite" />
+        <package android:name="com.tiktok.lite.go" />
         <package android:name="com.facebook.katana" />
         <package android:name="com.facebook.lite" />
         <package android:name="com.facebook.orca" />

@@ -1,6 +1,7 @@
 package com.brightfetch.app.browser
 
 import java.net.URI
+import java.net.URLDecoder
 import java.util.Locale
 
 /** Apps that the embedded browser may open from an explicit user-initiated app link. */
@@ -17,12 +18,18 @@ enum class ExternalBrowserApp(
             "com.zhiliaoapp.musically",
             "com.ss.android.ugc.trill",
             "com.zhiliaoapp.musically.go",
+            "com.ss.android.ugc.tiktok.lite",
+            "com.tiktok.lite.go",
         ),
         deepLinkSchemes = setOf(
             "tiktok",
             "musically",
             "snssdk1233",
             "snssdk1180",
+            "snssdkonly1180",
+            "snssdkotl1233",
+            "snssdkm21233",
+            "snssdklitem21233",
         ),
     ),
     FACEBOOK(
@@ -46,6 +53,16 @@ enum class ExternalBrowserApp(
 data class UnsupportedDownloadPlatform(
     val displayName: String,
     val message: String,
+)
+
+data class ExternalAppLinkRequest(
+    val app: ExternalBrowserApp,
+    val targetUrl: String,
+)
+
+data class StoreInstallRequest(
+    val app: ExternalBrowserApp,
+    val requestedPackage: String,
 )
 
 /** Pure URL policy shared by WebView navigation and the download-button state. */
@@ -85,11 +102,20 @@ object BrowserPlatformPolicy {
      * endpoints are handed to an installed app after a real user gesture.
      */
     fun explicitWebAppLink(url: String?): ExternalBrowserApp? {
+        return externalAppLinkRequest(url)?.app
+    }
+
+    /**
+     * Resolves user-facing web app links to the URL that the native app should receive.
+     * TikTok's OneLink page exposes the real deep link through its signed campaign URL's
+     * `af_dp` parameter; dispatching that value avoids the redirect to Google Play.
+     */
+    fun externalAppLinkRequest(url: String?): ExternalAppLinkRequest? {
         val uri = parseHttpUri(url) ?: return null
         val host = uri.host?.normalizeHost() ?: return null
         val path = uri.rawPath.orEmpty().lowercase(Locale.ROOT)
         val query = uri.rawQuery.orEmpty().lowercase(Locale.ROOT)
-        return when {
+        val directApp = when {
             host in setOf("vm.tiktok.com", "vt.tiktok.com") ||
                 (host.matchesDomain("tiktok.com") && path.startsWith("/t/")) ||
                 (host.matchesDomain("tiktok.com") && query.hasOpenAppMarker()) -> {
@@ -101,6 +127,49 @@ object BrowserPlatformPolicy {
             }
             else -> null
         }
+        if (directApp != null) {
+            return ExternalAppLinkRequest(directApp, uri.toASCIIString())
+        }
+
+        if (
+            uri.scheme.equals("https", ignoreCase = true) &&
+            uri.hasStandardHttpsAuthority() &&
+            host in TIKTOK_ONE_LINK_HOSTS &&
+            path.isNotBlank() &&
+            path != "/"
+        ) {
+            val deepLink = uri.uniqueDecodedQueryValue("af_dp") ?: return null
+            if (isSafeTargetFor(ExternalBrowserApp.TIKTOK, deepLink)) {
+                return ExternalAppLinkRequest(ExternalBrowserApp.TIKTOK, deepLink)
+            }
+        }
+        return null
+    }
+
+    /** Exact allowlisted Google Play/market install URL, never an arbitrary package. */
+    fun storeInstallRequest(url: String?): StoreInstallRequest? {
+        val uri = runCatching { URI(url?.trim().orEmpty()) }.getOrNull() ?: return null
+        val scheme = uri.scheme?.lowercase(Locale.ROOT) ?: return null
+        val host = uri.host?.normalizeHost() ?: return null
+        val path = uri.rawPath.orEmpty()
+        val isSupportedStoreUrl = when (scheme) {
+            "https" -> uri.hasStandardHttpsAuthority() &&
+                host == "play.google.com" &&
+                path == "/store/apps/details"
+            "market" -> uri.rawUserInfo == null &&
+                uri.port == -1 &&
+                host == "details" &&
+                (path.isBlank() || path == "/")
+            else -> false
+        }
+        if (!isSupportedStoreUrl) return null
+        val requestedPackage = uri.uniqueDecodedQueryValue("id") ?: return null
+        val app = externalAppForPackage(requestedPackage) ?: return null
+        return StoreInstallRequest(app, requestedPackage)
+    }
+
+    fun externalAppForStoreUrl(url: String?): ExternalBrowserApp? {
+        return storeInstallRequest(url)?.app
     }
 
     fun unsupportedDownloadFor(url: String?): UnsupportedDownloadPlatform? {
@@ -145,6 +214,25 @@ object BrowserPlatformPolicy {
     private fun String.matchesDomain(domain: String): Boolean =
         this == domain || endsWith(".$domain")
 
+    private fun URI.hasStandardHttpsAuthority(): Boolean =
+        rawUserInfo == null && (port == -1 || port == 443)
+
+    private fun URI.uniqueDecodedQueryValue(expectedKey: String): String? {
+        val matches = rawQuery.orEmpty().split('&').filter { parameter ->
+            val rawKey = parameter.substringBefore('=')
+            val key = rawKey.decodeQueryComponent() ?: return@filter false
+            key == expectedKey
+        }
+        val match = matches.singleOrNull() ?: return null
+        return match.substringAfter('=', missingDelimiterValue = "")
+            .decodeQueryComponent()
+            ?.takeIf(String::isNotBlank)
+    }
+
+    private fun String.decodeQueryComponent(): String? = runCatching {
+        URLDecoder.decode(this, Charsets.UTF_8.name())
+    }.getOrNull()
+
     private fun String.hasOpenAppMarker(): Boolean = split('&').any { parameter ->
         val key = parameter.substringBefore('=')
         val value = parameter.substringAfter('=', missingDelimiterValue = "")
@@ -154,4 +242,9 @@ object BrowserPlatformPolicy {
             else -> false
         }
     }
+
+    private val TIKTOK_ONE_LINK_HOSTS = setOf(
+        "snssdk1180.onelink.me",
+        "snssdk1233.onelink.me",
+    )
 }
