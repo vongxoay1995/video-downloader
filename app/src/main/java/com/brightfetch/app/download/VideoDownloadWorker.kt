@@ -107,6 +107,7 @@ class VideoDownloadWorker(
                 Data.Builder()
                     .putString(DownloadContract.KEY_OUTPUT_PATH, published.displayPath)
                     .putString(DownloadContract.KEY_OUTPUT_URI, published.uri.toString())
+                    .putLong(DownloadContract.KEY_TOTAL, published.size)
                     .build()
             )
         } catch (unsupported: UnsupportedMediaException) {

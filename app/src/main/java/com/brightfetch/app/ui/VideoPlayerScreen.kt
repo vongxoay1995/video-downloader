@@ -15,6 +15,12 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,19 +32,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Forward5
+import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay5
+import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,6 +79,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -85,17 +97,21 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import com.brightfetch.app.model.DownloadedVideo
+import com.brightfetch.app.ui.theme.Violet
 import kotlinx.coroutines.delay
 import kotlin.math.max
 
-/** Immersive player for a MediaStore video. Controls are hidden until the video is tapped. */
+/** Portrait listening controls and immersive landscape share a single player/video surface. */
 @Composable
 fun VideoPlayerScreen(
     video: DownloadedVideo,
     onBack: () -> Unit,
+    initialPositionMillis: Long = 0L,
+    onSaveProgress: (Long, Long) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val lifecycleOwner = LocalLifecycleOwner.current
     val hostView = LocalView.current
     val activity = remember(context) { context.findActivity() }
@@ -121,13 +137,13 @@ fun VideoPlayerScreen(
             },
         )
     }
-    var positionMillis by remember(video.uri) { mutableLongStateOf(0L) }
+    var positionMillis by remember(video.uri) { mutableLongStateOf(initialPositionMillis) }
     var isSeeking by remember(video.uri) { mutableStateOf(false) }
     var seekFraction by remember(video.uri) { mutableFloatStateOf(0f) }
     var resumeWhenForegrounded by remember(video.uri) { mutableStateOf(false) }
     var resumePositionMillis by remember(video.uri) { mutableLongStateOf(0L) }
 
-    var controlsVisible by remember(video.uri) { mutableStateOf(false) }
+    var controlsVisible by remember(video.uri) { mutableStateOf(true) }
     var controlInteraction by remember(video.uri) { mutableIntStateOf(0) }
     var controlsLocked by remember(video.uri) { mutableStateOf(false) }
     var isMuted by remember(video.uri) { mutableStateOf(false) }
@@ -184,23 +200,27 @@ fun VideoPlayerScreen(
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         onDispose {
             controller?.show(WindowInsetsCompat.Type.systemBars())
-            if (window != null) WindowCompat.setDecorFitsSystemWindows(window, true)
+            controller?.isAppearanceLightStatusBars = true
+            controller?.isAppearanceLightNavigationBars = true
+            if (window != null) WindowCompat.setDecorFitsSystemWindows(window, false)
             activity?.requestedOrientation = originalOrientation
         }
     }
 
-    LaunchedEffect(activity, hostView, controlsVisible, errorMessage) {
+    LaunchedEffect(activity, hostView, controlsVisible, errorMessage, isLandscape) {
         val window = activity?.window ?: return@LaunchedEffect
         val controller = WindowCompat.getInsetsController(window, hostView)
-        if (controlsVisible || errorMessage != null) {
+        controller.isAppearanceLightStatusBars = false
+        controller.isAppearanceLightNavigationBars = false
+        if (!isLandscape || controlsVisible || errorMessage != null) {
             controller.show(WindowInsetsCompat.Type.systemBars())
         } else {
             controller.hide(WindowInsetsCompat.Type.systemBars())
         }
     }
 
-    LaunchedEffect(controlsVisible, isPlaying, isSeeking, controlsLocked, controlInteraction) {
-        if (controlsVisible && isPlaying && !isSeeking && errorMessage == null) {
+    LaunchedEffect(controlsVisible, isPlaying, isSeeking, controlsLocked, controlInteraction, isLandscape) {
+        if (isLandscape && controlsVisible && isPlaying && !isSeeking && errorMessage == null) {
             delay(if (controlsLocked) 1_800L else 3_200L)
             controlsVisible = false
         }
@@ -259,12 +279,13 @@ fun VideoPlayerScreen(
                     "Video playback failed: uri=${video.uri} path=${video.displayPath}",
                     error,
                 )
-                errorMessage = "Unable to play this video (${error.errorCodeName}). Tap Retry to try again."
+                errorMessage = "The file may be incomplete or use a format this player doesn’t support."
             }
         }
         player.addListener(listener)
         player.setVideoTextureView(textureView)
         onDispose {
+            onSaveProgress(runCatching { player.currentPosition }.getOrDefault(positionMillis), durationMillis)
             resumeWhenForegrounded = false
             textureView.keepScreenOn = false
             player.clearVideoTextureView(textureView)
@@ -279,13 +300,13 @@ fun VideoPlayerScreen(
         isPlaying = false
         isBuffering = true
         hasRenderedFirstFrame = false
-        positionMillis = 0L
+        val startPosition = if (retryGeneration == 0) initialPositionMillis else positionMillis
         runCatching {
             player.stop()
             player.clearMediaItems()
             applyAudioState(isMuted)
             applySpeed(playbackSpeed)
-            player.setMediaItem(MediaItem.fromUri(video.uri))
+            player.setMediaItem(MediaItem.fromUri(video.uri), startPosition)
             player.prepare()
             player.playWhenReady = true
         }.onFailure { error ->
@@ -308,7 +329,7 @@ fun VideoPlayerScreen(
                     "No video frame rendered: uri=${video.uri} path=${video.displayPath}",
                 )
                 errorMessage =
-                    "Audio started, but no video frame could be rendered. Tap Retry to try again."
+                    "This file’s video format couldn’t be displayed. Try opening it again."
             }
         }
     }
@@ -321,7 +342,7 @@ fun VideoPlayerScreen(
                 runCatching { player.stop() }
                 isPrepared = false
                 isBuffering = false
-                errorMessage = "The video took too long to open. Tap Retry to try again."
+                errorMessage = "This video took too long to open. Try again or choose another file."
             }
         }
     }
@@ -350,6 +371,7 @@ fun VideoPlayerScreen(
                         runCatching { player.isPlaying }.getOrDefault(false)
                     resumePositionMillis = runCatching { player.currentPosition }
                         .getOrDefault(positionMillis)
+                    onSaveProgress(resumePositionMillis, durationMillis)
                     runCatching { player.pause() }
                     isPlaying = false
                 }
@@ -371,58 +393,70 @@ fun VideoPlayerScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color(0xFF111722)),
         contentAlignment = Alignment.Center,
     ) {
-        AndroidView(
-            factory = { textureView },
-            modifier = Modifier
-                .aspectRatio(videoAspectRatio)
-                .fillMaxSize(),
-        )
-
+        val portraitMediaHeight = (maxHeight * .34f).coerceIn(150.dp, 320.dp)
+        val mediaTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 80.dp
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(controlsLocked, errorMessage) {
-                    detectTapGestures {
-                        if (errorMessage == null) {
+            modifier = (if (isLandscape) Modifier.fillMaxSize() else Modifier.align(Alignment.TopCenter)
+                .offset(y = mediaTop).padding(horizontal = 24.dp).fillMaxWidth().height(portraitMediaHeight)
+                .clip(RoundedCornerShape(22.dp)))
+                .background(Color.Black)
+                .pointerInput(controlsLocked, errorMessage, isLandscape) {
+                    detectTapGestures(onTap = {
+                        if (errorMessage == null && isLandscape) {
                             controlsVisible = !controlsVisible
                             markControlInteraction()
                         }
-                    }
+                    }, onLongPress = {
+                        if (controlsLocked) { controlsLocked = false; controlsVisible = true }
+                    })
                 },
-        )
-
-        if (isBuffering && errorMessage == null) {
-            CircularProgressIndicator(color = Color.White)
+            contentAlignment = Alignment.Center,
+        ) {
+            AndroidView(factory = { textureView }, modifier = Modifier.aspectRatio(videoAspectRatio).fillMaxSize())
+            if (!isLandscape && !controlsLocked && errorMessage == null) {
+                Text("OFFLINE", color = Color(0xFF192136), fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
+                        .background(Color.White, RoundedCornerShape(14.dp)).padding(horizontal = 11.dp, vertical = 5.dp))
+            }
+            if (isBuffering && errorMessage == null) CircularProgressIndicator(color = Violet)
         }
 
         val currentError = errorMessage
         if (currentError != null) {
             Column(
-                modifier = Modifier.align(Alignment.Center).padding(28.dp),
+                modifier = Modifier.align(Alignment.Center).fillMaxWidth()
+                    .background(Color(0xFF111722)).statusBarsPadding().navigationBarsPadding().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(currentError, color = Color.White, style = MaterialTheme.typography.bodyLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                        Text("Back", modifier = Modifier.padding(start = 6.dp))
-                    }
-                    Button(onClick = { retryGeneration += 1 }) {
-                        Icon(Icons.Default.Refresh, contentDescription = null)
-                        Text("Retry", modifier = Modifier.padding(start = 6.dp))
-                    }
+                VideoArtwork(video, Modifier.fillMaxWidth().height(190.dp))
+                Spacer(Modifier.height(8.dp))
+                Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFFFD994),
+                    modifier = Modifier.size(42.dp))
+                Text("Can’t play this file", color = Color.White, fontSize = 23.sp,
+                    fontWeight = FontWeight.Bold)
+                Text(currentError, color = Color(0xFFAAB2C3), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = { retryGeneration += 1 }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Text("Try again", modifier = Modifier.padding(start = 8.dp))
                 }
+                Button(onClick = onBack, modifier = Modifier.fillMaxWidth().height(52.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF202A39))) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    Text("Open another file", modifier = Modifier.padding(start = 8.dp))
+                }
+                Text("Your saved file won’t be removed.", color = Color(0xFFAAB2C3), fontSize = 12.sp)
             }
         }
 
-        if (controlsVisible && errorMessage == null) {
+        if ((controlsVisible || !isLandscape) && errorMessage == null) {
             if (controlsLocked) {
                 RoundIconButton(
                     icon = Icons.Default.LockOpen,
@@ -438,6 +472,9 @@ fun VideoPlayerScreen(
                 )
             } else {
                 PlayerControls(
+                    portrait = !isLandscape,
+                    portraitMediaHeight = portraitMediaHeight,
+                    subtitle = "${VideoLibraryFormatting.quality(video.width, video.height)} · Saved on this device",
                     videoName = video.name,
                     isMuted = isMuted,
                     speed = playbackSpeed,
@@ -477,8 +514,8 @@ fun VideoPlayerScreen(
                         seekTo((durationMillis * seekFraction).toLong())
                         isSeeking = false
                     },
-                    onRewind = { seekTo(positionMillis - 5_000L) },
-                    onForward = { seekTo(positionMillis + 5_000L) },
+                    onRewind = { seekTo(positionMillis - 10_000L) },
+                    onForward = { seekTo(positionMillis + 10_000L) },
                     onPlayPause = {
                         if (player.isPlaying) {
                             player.pause()
@@ -507,6 +544,9 @@ fun VideoPlayerScreen(
 
 @Composable
 private fun PlayerControls(
+    portrait: Boolean,
+    portraitMediaHeight: Dp,
+    subtitle: String,
     videoName: String,
     isMuted: Boolean,
     speed: Float,
@@ -527,138 +567,155 @@ private fun PlayerControls(
     onPlayPause: () -> Unit,
     onLock: () -> Unit,
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Black.copy(alpha = 0.88f), Color.Transparent),
-                    ),
-                )
-                .statusBarsPadding()
-                .padding(bottom = 28.dp),
+    if (portrait) {
+        PortraitPlayerControls(
+            videoName, subtitle, portraitMediaHeight, isMuted, speed, isPlaying, isPrepared,
+            if (isSeeking) seekFraction else playbackFraction(positionMillis, durationMillis),
+            positionMillis, durationMillis, onBack, onMute, onRotate, onSpeed, onSeekChanged,
+            onSeekFinished, onRewind, onForward, onPlayPause, onLock,
+        )
+        return
+    }
+    Box(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .65f), Color.Transparent)))
+                .statusBarsPadding().padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                    )
-                }
-                Text(
-                    text = videoName,
-                    modifier = Modifier.weight(1f),
-                    color = Color.White,
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
             }
-            Row(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(28.dp),
-            ) {
-                LabeledControl(label = if (isMuted) "Unmute" else "Mute", onClick = onMute) {
-                    Icon(
-                        if (isMuted) {
-                            Icons.AutoMirrored.Filled.VolumeOff
-                        } else {
-                            Icons.AutoMirrored.Filled.VolumeUp
-                        },
-                        contentDescription = null,
-                        tint = Color.White,
-                    )
+            Text(videoName.substringBeforeLast('.'), color = Color.White, fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f))
+            IconButton(onClick = onLock) {
+                Icon(Icons.Default.Lock, contentDescription = "Lock controls", tint = Color.White)
+            }
+        }
+        Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(30.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            RoundIconButton(Icons.Default.Replay10, "Rewind 10 seconds", onRewind, enabled = isPrepared)
+            RoundIconButton(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                if (isPlaying) "Pause" else "Play", onPlayPause, enabled = isPrepared, emphasized = true)
+            RoundIconButton(Icons.Default.Forward10, "Forward 10 seconds", onForward, enabled = isPrepared)
+        }
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .8f))))
+            .navigationBarsPadding().padding(horizontal = 24.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(formatPlaybackTime(positionMillis), color = Color.White, fontSize = 11.sp)
+                Text(formatPlaybackTime(durationMillis), color = Color.White, fontSize = 11.sp)
+            }
+            PlayerSeekSlider(if (isSeeking) seekFraction else playbackFraction(positionMillis, durationMillis),
+                isPrepared && durationMillis > 0L, onSeekChanged, onSeekFinished)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onMute) {
+                    Icon(if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = if (isMuted) "Unmute" else "Mute", tint = Color.White)
                 }
-                LabeledControl(label = "Rotate", onClick = onRotate) {
-                    Icon(Icons.Default.ScreenRotation, contentDescription = null, tint = Color.White)
+                androidx.compose.material3.TextButton(onClick = onSpeed) {
+                    Text("${formatSpeed(speed)}×", color = Color.White, fontWeight = FontWeight.Bold)
                 }
-                LabeledControl(label = "Speed", onClick = onSpeed) {
-                    Text(
-                        text = "${formatSpeed(speed)}x",
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 18.sp,
-                    )
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onRotate) {
+                    Icon(Icons.Default.ScreenRotation, contentDescription = "Exit full screen", tint = Color.White)
                 }
             }
         }
+    }
+}
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.94f)),
-                    ),
-                )
-                .navigationBarsPadding()
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-        ) {
-            Slider(
-                value = if (isSeeking) seekFraction else playbackFraction(positionMillis, durationMillis),
-                onValueChange = onSeekChanged,
-                onValueChangeFinished = onSeekFinished,
-                enabled = isPrepared && durationMillis > 0L,
-                colors = SliderDefaults.colors(
-                    thumbColor = Color(0xFF20C55A),
-                    activeTrackColor = Color(0xFF20C55A),
-                    inactiveTrackColor = Color.White.copy(alpha = 0.42f),
-                ),
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 3.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(formatPlaybackTime(positionMillis), color = Color.White, fontSize = 14.sp)
-                Text(formatPlaybackTime(durationMillis), color = Color.White, fontSize = 14.sp)
+@Composable
+private fun PortraitPlayerControls(
+    title: String,
+    subtitle: String,
+    mediaHeight: Dp,
+    muted: Boolean,
+    speed: Float,
+    playing: Boolean,
+    prepared: Boolean,
+    fraction: Float,
+    position: Long,
+    duration: Long,
+    onBack: () -> Unit,
+    onMute: () -> Unit,
+    onRotate: () -> Unit,
+    onSpeed: () -> Unit,
+    onSeek: (Float) -> Unit,
+    onSeekFinished: () -> Unit,
+    onRewind: () -> Unit,
+    onForward: () -> Unit,
+    onPlayPause: () -> Unit,
+    onLock: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)) {
+        Spacer(Modifier.height(16.dp))
+        Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack, modifier = Modifier.background(Color(0xFF202A39), RoundedCornerShape(15.dp))) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Library", tint = Color.White)
             }
-            Spacer(Modifier.height(4.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                RoundIconButton(
-                    icon = Icons.Default.Lock,
-                    contentDescription = "Lock controls",
-                    onClick = onLock,
-                    small = true,
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(22.dp),
-                ) {
-                    RoundIconButton(
-                        icon = Icons.Default.Replay5,
-                        contentDescription = "Rewind 5 seconds",
-                        onClick = onRewind,
-                        enabled = isPrepared,
-                    )
-                    RoundIconButton(
-                        icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        onClick = onPlayPause,
-                        enabled = isPrepared,
-                        emphasized = true,
-                    )
-                    RoundIconButton(
-                        icon = Icons.Default.Forward5,
-                        contentDescription = "Forward 5 seconds",
-                        onClick = onForward,
-                        enabled = isPrepared,
-                    )
-                }
-                Spacer(Modifier.size(44.dp))
+            Text("NOW PLAYING", color = Color(0xFFABB4C4), fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Spacer(Modifier.width(48.dp))
+        }
+        Spacer(Modifier.height(16.dp + mediaHeight + 20.dp))
+        Text(title.substringBeforeLast('.'), color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold,
+            lineHeight = 29.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(5.dp))
+        Text(subtitle, color = Color(0xFFABB4C4), fontSize = 12.sp)
+        Spacer(Modifier.height(10.dp))
+        PlayerSeekSlider(fraction, prepared && duration > 0L, onSeek, onSeekFinished)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(formatPlaybackTime(position), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text(formatPlaybackTime(duration), color = Color(0xFFABB4C4), fontSize = 11.sp)
+        }
+        Spacer(Modifier.height(18.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(30.dp, Alignment.CenterHorizontally)) {
+            RoundIconButton(Icons.Default.Replay10, "Rewind 10 seconds", onRewind, enabled = prepared)
+            RoundIconButton(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                if (playing) "Pause" else "Play", onPlayPause, enabled = prepared, emphasized = true)
+            RoundIconButton(Icons.Default.Forward10, "Forward 10 seconds", onForward, enabled = prepared)
+        }
+        Spacer(Modifier.height(24.dp))
+        Row(Modifier.fillMaxWidth().background(Color(0xFF202A39), RoundedCornerShape(20.dp)).padding(vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly) {
+            PlayerTool("Speed", onSpeed) { Text("${formatSpeed(speed)}×", color = Color.White, fontWeight = FontWeight.Bold) }
+            PlayerTool(if (muted) "Unmute" else "Mute", onMute) {
+                Icon(if (muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+            PlayerTool("Lock", onLock) { Icon(Icons.Default.Lock, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp)) }
+            PlayerTool("Full screen", onRotate) {
+                Icon(Icons.Default.ScreenRotation, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
             }
         }
+        Spacer(Modifier.weight(1f))
+        Text("Saved on this device", color = Color(0xFFABB4C4), fontSize = 11.sp,
+            modifier = Modifier.align(Alignment.CenterHorizontally).padding(vertical = 18.dp))
+    }
+}
+
+@Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+private fun PlayerSeekSlider(value: Float, enabled: Boolean, onChange: (Float) -> Unit, onFinished: () -> Unit) {
+    Slider(value = value, onValueChange = onChange, onValueChangeFinished = onFinished, enabled = enabled,
+        modifier = Modifier.fillMaxWidth().height(32.dp),
+        thumb = { Box(Modifier.size(12.dp).background(Color.White, CircleShape)) },
+        track = {
+            Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(Color(0xFF343E50))) {
+                Box(Modifier.fillMaxWidth(value.coerceIn(0f, 1f)).height(4.dp).background(Color(0xFFB5A7FF)))
+            }
+        })
+}
+
+@Composable
+private fun PlayerTool(label: String, onClick: () -> Unit, content: @Composable () -> Unit) {
+    Column(Modifier.width(68.dp).height(52.dp).clickable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center) {
+        Box(Modifier.height(27.dp), contentAlignment = Alignment.Center) { content() }
+        Text(label, color = Color(0xFFABB4C4), fontSize = 10.sp)
     }
 }
 
@@ -705,7 +762,7 @@ private fun RoundIconButton(
         modifier = modifier
             .size(buttonSize)
             .clip(CircleShape)
-            .background(if (emphasized) Color.Transparent else Color.Black.copy(alpha = 0.54f))
+            .background(if (emphasized) Violet else Color.Black.copy(alpha = 0.54f))
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -713,7 +770,7 @@ private fun RoundIconButton(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.White.copy(alpha = 0.12f), CircleShape),
+                    .background(Violet, CircleShape),
             )
         }
         Icon(

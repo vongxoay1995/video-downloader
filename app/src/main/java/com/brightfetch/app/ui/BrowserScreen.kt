@@ -26,7 +26,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +38,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -78,6 +79,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
@@ -98,10 +100,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -129,7 +129,9 @@ import com.brightfetch.app.browser.MediaSniffer
 import com.brightfetch.app.browser.StoreInstallRequest
 import com.brightfetch.app.model.MediaFormatInspectionState
 import com.brightfetch.app.ui.theme.Ink
-import com.brightfetch.app.ui.theme.SunnyYellow
+import com.brightfetch.app.ui.theme.SoftViolet
+import com.brightfetch.app.ui.theme.Violet
+import com.brightfetch.app.ui.theme.Hairline
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
 
@@ -310,8 +312,16 @@ private enum class BrowserPanel {
     TABS,
 }
 
+enum class BrowserEntryPanel { NONE, HISTORY, BOOKMARKS, SETTINGS }
+
 @Composable
-fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
+fun BrowserScreen(
+    state: BrowserState,
+    viewModel: MainViewModel,
+    entryPanel: BrowserEntryPanel = BrowserEntryPanel.NONE,
+    onExit: () -> Unit = {},
+    onDownloadStarted: () -> Unit = {},
+) {
     val context = LocalContext.current
     val candidates by viewModel.candidates.collectAsState()
     val isResolvingPage by viewModel.isResolvingPage.collectAsState()
@@ -319,7 +329,13 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
     val history by viewModel.browserHistory.collectAsState()
     val bookmarks by viewModel.browserBookmarks.collectAsState()
     val settings by viewModel.browserSettings.collectAsState()
-    var panel by remember { mutableStateOf(BrowserPanel.NONE) }
+    var panel by remember(entryPanel) { mutableStateOf(when (entryPanel) {
+        BrowserEntryPanel.NONE -> BrowserPanel.NONE
+        BrowserEntryPanel.HISTORY -> BrowserPanel.HISTORY
+        BrowserEntryPanel.BOOKMARKS -> BrowserPanel.BOOKMARKS
+        BrowserEntryPanel.SETTINGS -> BrowserPanel.SETTINGS
+    }) }
+    var showDetectedPicker by remember { mutableStateOf(false) }
     val currentPageUrl = state.address.takeIf(::isHttpUrl)
     val unsupportedDownloadPlatform = BrowserPlatformPolicy.unsupportedDownloadFor(currentPageUrl)
     val isBookmarked = currentPageUrl != null && bookmarks.any { it.url == currentPageUrl }
@@ -335,7 +351,7 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
     }
 
     BackHandler(
-        enabled = panel != BrowserPanel.NONE || state.hasHiddenPage || !state.showLanding || state.tabCount > 1,
+        enabled = true,
     ) {
         when {
             panel != BrowserPanel.NONE -> panel = BrowserPanel.NONE
@@ -349,20 +365,18 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                 state.closeTab(state.currentTab.id)
                 viewModel.clearCandidates()
             }
+            else -> onExit()
         }
     }
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+        .statusBarsPadding().navigationBarsPadding()) {
         BrowserTopBar(
             state = state,
-            onHome = {
-                viewModel.clearCandidates()
-                state.home()
-                panel = BrowserPanel.NONE
-            },
+            onHome = onExit,
             onSubmit = { rawInput ->
                 viewModel.clearCandidates()
-                state.navigate(rawInput, BrowserSearchEngine.GOOGLE)
+                state.navigate(rawInput, settings.searchEngine)
                 panel = BrowserPanel.NONE
             },
             onNewTab = {
@@ -398,7 +412,7 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
             LinearProgressIndicator(
                 progress = { state.progress },
                 modifier = Modifier.fillMaxWidth().height(2.dp),
-                color = SunnyYellow,
+                color = Violet,
             )
         }
         Box(Modifier.weight(1f)) {
@@ -462,7 +476,7 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                     onClose = { panel = BrowserPanel.NONE },
                 )
                 BrowserPanel.NONE -> when {
-                    state.showLanding -> BrowserLanding(
+                    state.showLanding -> ModernBrowserLanding(
                         state = state,
                         onNavigate = {
                             viewModel.clearCandidates()
@@ -509,7 +523,7 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                LinearProgressIndicator(modifier = Modifier.width(48.dp), color = SunnyYellow)
+                LinearProgressIndicator(modifier = Modifier.width(48.dp), color = Violet)
                 Spacer(Modifier.width(12.dp))
                 Text("Extracting video…")
             }
@@ -519,9 +533,9 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .height(56.dp)
-                    .background(Color(0xFFE9DFFF), RoundedCornerShape(18.dp))
+                    .background(Ink, RoundedCornerShape(18.dp))
                     .clickable {
-                        viewModel.inspectMediaFormats(candidates.first())
+                        showDetectedPicker = true
                     },
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
@@ -529,11 +543,47 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                 Icon(
                     Icons.Default.Download,
                     contentDescription = null,
+                    tint = Color.White,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Download video")
+                Text("${candidates.size} video${if (candidates.size == 1) "" else "s"} found · View",
+                    color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         }
+        if (panel == BrowserPanel.NONE && !state.showLanding) {
+            Row(Modifier.fillMaxWidth().height(54.dp).background(Color.White),
+                horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { if (state.canGoBack) state.goBack() else state.home() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Ink)
+                }
+                IconButton(onClick = state::goForward, enabled = state.canGoForward) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Forward", tint = Ink)
+                }
+                IconButton(onClick = { state.home(); viewModel.clearCandidates() }) {
+                    Icon(Icons.Default.Home, contentDescription = "Browser home", tint = Ink)
+                }
+                IconButton(onClick = {
+                    currentPageUrl?.let { viewModel.toggleBrowserBookmark(it, state.pageTitle) }
+                }, enabled = currentPageUrl != null) {
+                    Icon(if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = "Bookmark page", tint = Ink)
+                }
+                IconButton(onClick = { panel = BrowserPanel.TABS }) {
+                    Icon(Icons.Default.OpenInBrowser, contentDescription = "Tabs", tint = Ink)
+                }
+            }
+        }
+    }
+
+    if (showDetectedPicker && candidates.isNotEmpty()) {
+        DetectedVideoPicker(
+            candidates = candidates,
+            onDismiss = { showDetectedPicker = false },
+            onChoose = { candidate ->
+                showDetectedPicker = false
+                viewModel.inspectMediaFormats(candidate)
+            },
+        )
     }
 
     when (val inspection = formatInspection) {
@@ -559,6 +609,7 @@ fun BrowserScreen(state: BrowserState, viewModel: MainViewModel) {
                 viewModel.enqueue(inspection.candidate, option)
                 Toast.makeText(context, "Added to downloads", Toast.LENGTH_SHORT).show()
                 panel = BrowserPanel.NONE
+                onDownloadStarted()
             },
             onCopyLink = { copyDownloadUrl(context, it) },
         )
@@ -710,7 +761,7 @@ private fun BookmarksPanel(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(
-                            Modifier.size(42.dp).background(Color(0xFFFFE69B), CircleShape),
+                            Modifier.size(42.dp).background(SoftViolet, CircleShape),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(Icons.Default.Bookmark, contentDescription = null, tint = Color(0xFF7A5B00))
@@ -768,7 +819,7 @@ private fun TabsPanel(
                 Card(
                     modifier = Modifier.fillMaxWidth().clickable { onSelect(tab.id) },
                     colors = CardDefaults.cardColors(
-                        containerColor = if (selected) Color(0xFFFFE69B) else MaterialTheme.colorScheme.surfaceVariant,
+                        containerColor = if (selected) SoftViolet else Color.White,
                     ),
                 ) {
                     Row(
@@ -795,7 +846,7 @@ private fun TabsPanel(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (selected) Text("Current", fontSize = 11.sp, color = Color(0xFF725700))
+                        if (selected) Text("Current", fontSize = 11.sp, color = Violet)
                         IconButton(onClick = { onCloseTab(tab.id) }) {
                             Icon(Icons.Default.Close, contentDescription = "Close tab")
                         }
@@ -936,7 +987,7 @@ private fun BrowserTopBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
         IconButton(onClick = onHome) {
-            Icon(Icons.Default.Home, contentDescription = "Home", tint = Ink)
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Home", tint = Ink)
         }
         OutlinedTextField(
             value = if (editorHasFocus) editorText else currentPageUrl.orEmpty(),
@@ -955,9 +1006,15 @@ private fun BrowserTopBar(
                     }
                 },
             singleLine = true,
-            placeholder = { Text("Search Google or enter URL", maxLines = 1) },
+            placeholder = { Text("Search or enter URL", maxLines = 1) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedContainerColor = Color.White,
+                focusedContainerColor = Color.White,
+                unfocusedBorderColor = Hairline,
+                focusedBorderColor = Violet,
+            ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
             keyboardActions = KeyboardActions(onGo = { submitAndDismissKeyboard() }),
             trailingIcon = {
@@ -966,23 +1023,25 @@ private fun BrowserTopBar(
                 }
             },
         )
-        IconButton(onClick = onNewTab) {
-            Icon(Icons.Default.Add, contentDescription = "New tab", tint = Ink)
-        }
         Box(
             Modifier
                 .size(38.dp)
-                .background(Color.Transparent, RoundedCornerShape(8.dp))
+                .background(Color.White, RoundedCornerShape(10.dp))
                 .clickable(onClick = onShowTabs),
             contentAlignment = Alignment.Center,
         ) {
-            Text(state.tabCount.toString(), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text(state.tabCount.toString(), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Ink)
         }
         Box {
             IconButton(onClick = { menuExpanded = true }) {
                 Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Ink)
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                DropdownMenuItem(
+                    text = { Text("New tab") },
+                    leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    onClick = { menuExpanded = false; onNewTab() },
+                )
                 DropdownMenuItem(
                     text = { Text(if (isBookmarked) "Remove bookmark" else "Bookmark this page") },
                     leadingIcon = {
@@ -1156,132 +1215,6 @@ private fun CurrentPageCard(
                 Icon(Icons.Default.Edit, contentDescription = "Edit current page URL")
             }
         }
-    }
-}
-
-@Composable
-private fun BrowserLanding(
-    state: BrowserState,
-    onNavigate: (String) -> Unit,
-    onOpenHistory: () -> Unit,
-    onOpenBookmarks: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
-    var showDisclaimer by remember { mutableStateOf(true) }
-    Box(Modifier.fillMaxSize()) {
-        SunnyBackground()
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xEEF4F3EF)),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 18.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    QuickAction(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        "Return to page",
-                        state.hasHiddenPage,
-                        state::restoreHiddenPage,
-                    )
-                    QuickAction(Icons.AutoMirrored.Filled.ArrowForward, "Forward", state.canGoForward, state::goForward)
-                    QuickAction(Icons.Default.Refresh, "Refresh", state.webView != null, state::reload)
-                    QuickAction(Icons.Default.Bookmark, "Bookmarks", onClick = onOpenBookmarks)
-                    QuickAction(Icons.Default.History, "History", onClick = onOpenHistory)
-                    QuickAction(Icons.Default.Tune, "Settings", onClick = onOpenSettings)
-                }
-            }
-
-            if (showDisclaimer) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xEEF4F3EF)),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Disclaimer", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.weight(1f))
-                            IconButton(onClick = { showDisclaimer = false }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.Close, contentDescription = "Close")
-                            }
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "This app only downloads user-authorized, publicly accessible video files. " +
-                                "Copyright-protected, paywalled, DRM-protected and encrypted content—including YouTube—is not supported.\n\n" +
-                                "Make sure the content belongs to you, is licensed for download, or is in the public domain.",
-                            lineHeight = 22.sp,
-                            color = Color(0xFF30352F),
-                        )
-                    }
-                }
-            }
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xEAF5F3ED)),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                    Text("Search Engine", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(16.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-                        SearchEngineButton("G", "Google", Color(0xFF4285F4)) { onNavigate("https://www.google.com") }
-                        SearchEngineButton("D", "DuckDuckGo", Color(0xFFDE5833)) { onNavigate("https://duckduckgo.com") }
-                        SearchEngineButton("b", "Bing", Color(0xFF008373)) { onNavigate("https://www.bing.com") }
-                        SearchEngineButton("Y!", "Yahoo", Color(0xFF6001D2)) { onNavigate("https://search.yahoo.com") }
-                    }
-                }
-            }
-            Spacer(Modifier.height(200.dp))
-        }
-    }
-}
-
-@Composable
-private fun SunnyBackground() {
-    Canvas(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Color(0xFFFFFCED), Color(0xFFFFDF62), Color(0xFFFFD84D)))
-        )
-    ) {
-        val wave = Path().apply {
-            moveTo(0f, 0f)
-            lineTo(size.width, 0f)
-            lineTo(size.width, size.height * .39f)
-            quadraticTo(size.width * .52f, size.height * .57f, 0f, size.height * .63f)
-            close()
-        }
-        drawPath(wave, color = Color(0xCCFFFDF5), style = Fill)
-        drawCircle(
-            color = Color(0x22FFFFFF),
-            radius = size.width * .55f,
-            center = Offset(size.width * .85f, size.height * .8f),
-        )
-    }
-}
-
-@Composable
-private fun QuickAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
-    IconButton(onClick = onClick, enabled = enabled) {
-        Icon(icon, contentDescription = label, tint = if (enabled) Ink else Ink.copy(alpha = .3f))
-    }
-}
-
-@Composable
-private fun SearchEngineButton(mark: String, label: String, color: Color, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier.width(72.dp).clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(Modifier.size(52.dp).background(color, CircleShape), contentAlignment = Alignment.Center) {
-            Text(mark, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(7.dp))
-        Text(label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

@@ -21,7 +21,9 @@ object DownloadScheduler {
             .build()
         val request = OneTimeWorkRequestBuilder<VideoDownloadWorker>()
             .setInputData(input)
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(
+                if (DownloadPreferences.wifiOnly(context)) NetworkType.UNMETERED else NetworkType.CONNECTED
+            ).build())
             .addTag(DownloadContract.TAG)
             .addTag(DownloadContract.TAG_NAME_PREFIX + candidate.suggestedFileName.take(120))
             .build()

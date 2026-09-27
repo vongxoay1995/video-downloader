@@ -1,0 +1,574 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="3040" viewBox="0 0 1900 3040" role="img" aria-labelledby="board-title board-desc">
+  <title id="board-title">BrightFetch UI state board 01</title>
+  <desc id="board-desc">Twelve editable Android phone designs covering onboarding, download states, library states, deletion confirmation, and undo feedback.</desc>
+  <defs>
+    <style><![CDATA[
+      text { font-family: Roboto, Arial, sans-serif; fill: #17231B; }
+      text[fill="#FFFFFF"] { fill:#FFFFFF; }
+      text[fill="#FFFDF5"] { fill:#FFFDF5; }
+      text[fill="#FFD84D"] { fill:#FFD84D; }
+      text[fill="#C9D0CB"] { fill:#C9D0CB; }
+      text[fill="#18794E"] { fill:#18794E; }
+      text[fill="#B23B32"] { fill:#B23B32; }
+      text[fill="#786000"] { fill:#786000; }
+      text[fill="#6C756F"] { fill:#6C756F; }
+      text[fill="#6B746E"] { fill:#6B746E; }
+      .board-kicker { font-size: 13px; font-weight: 700; letter-spacing: 2.4px; fill: #6C756F; }
+      .board-title { font-size: 38px; font-weight: 700; }
+      .board-sub { font-size: 16px; font-weight: 400; fill: #68716B; }
+      .state-label { font-size: 17px; font-weight: 700; }
+      .state-note { font-size: 12px; font-weight: 500; fill: #778079; letter-spacing: .2px; }
+      .status { font-size: 11px; font-weight: 700; }
+      .h1 { font-size: 28px; font-weight: 700; }
+      .h2 { font-size: 21px; font-weight: 700; }
+      .h3 { font-size: 16px; font-weight: 700; }
+      .body { font-size: 14px; font-weight: 400; }
+      .body-med { font-size: 14px; font-weight: 500; }
+      .small { font-size: 12px; font-weight: 400; fill: #68716B; }
+      .small-med { font-size: 12px; font-weight: 700; }
+      .tiny { font-size: 10px; font-weight: 700; }
+      .button { font-size: 15px; font-weight: 700; }
+      .nav-label { font-size: 10px; font-weight: 700; }
+      .center { text-anchor: middle; }
+      .end { text-anchor: end; }
+      .line { fill: none; stroke: #17231B; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+      .line-soft { fill: none; stroke: #7B837D; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    ]]></style>
+    <filter id="phone-shadow" x="-20%" y="-10%" width="140%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#17231B" flood-opacity="0.12"/>
+    </filter>
+    <filter id="card-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#17231B" flood-opacity="0.10"/>
+    </filter>
+    <clipPath id="phone-clip"><rect width="393" height="873" rx="40"/></clipPath>
+    <linearGradient id="onboard-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFDF5"/>
+      <stop offset="1" stop-color="#FFF2B8"/>
+    </linearGradient>
+    <linearGradient id="thumb-a" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5B7E73"/>
+      <stop offset="0.55" stop-color="#9BC8B0"/>
+      <stop offset="1" stop-color="#FFD84D"/>
+    </linearGradient>
+    <linearGradient id="thumb-b" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#445D74"/>
+      <stop offset="0.58" stop-color="#88AAC5"/>
+      <stop offset="1" stop-color="#F3BF65"/>
+    </linearGradient>
+    <linearGradient id="thumb-c" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#54455E"/>
+      <stop offset="0.56" stop-color="#B58BAF"/>
+      <stop offset="1" stop-color="#D7F1E2"/>
+    </linearGradient>
+
+    <g id="status-bar">
+      <text x="22" y="21" class="status">9:41</text>
+      <path d="M326 17c4-5 10-5 14 0M330 20c2-2 4-2 6 0" class="line" stroke-width="1.4"/>
+      <rect x="347" y="12" width="18" height="10" rx="2" fill="none" stroke="#17231B" stroke-width="1.5"/>
+      <rect x="365.5" y="15" width="2" height="4" rx="1" fill="#17231B"/>
+      <rect x="349.5" y="14.5" width="12" height="5" rx="1" fill="#17231B"/>
+    </g>
+
+    <g id="brand-mark">
+      <rect width="48" height="48" rx="15" fill="#FFD84D" stroke="#17231B" stroke-width="2"/>
+      <path d="M24 10v19M16 22l8 8 8-8M14 37h20" class="line" stroke-width="3"/>
+    </g>
+
+    <g id="icon-download">
+      <path d="M12 2v13M6.5 10.5 12 16l5.5-5.5M4 21h16" class="line"/>
+    </g>
+    <g id="icon-browser">
+      <rect x="2" y="3" width="20" height="18" rx="4" class="line"/>
+      <path d="M2 8h20M6 5.5h.01M9 5.5h.01" class="line"/>
+    </g>
+    <g id="icon-library">
+      <rect x="2" y="3" width="8" height="8" rx="2" class="line"/>
+      <rect x="14" y="3" width="8" height="8" rx="2" class="line"/>
+      <rect x="2" y="15" width="8" height="8" rx="2" class="line"/>
+      <rect x="14" y="15" width="8" height="8" rx="2" class="line"/>
+    </g>
+    <g id="icon-play">
+      <circle cx="12" cy="12" r="11" fill="#FFFDF5" fill-opacity=".94"/>
+      <path d="M10 7.5 17 12l-7 4.5z" fill="#17231B"/>
+    </g>
+    <g id="icon-check">
+      <path d="m4 12 5 5L20 6" fill="none" stroke="#18794E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <g id="icon-alert">
+      <path d="M12 3 22 21H2z" fill="none" stroke="#B23B32" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M12 9v5M12 17.5v.2" fill="none" stroke="#B23B32" stroke-width="2.4" stroke-linecap="round"/>
+    </g>
+    <g id="icon-trash">
+      <path d="M5 7h14M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" class="line"/>
+    </g>
+    <g id="icon-share">
+      <circle cx="6" cy="12" r="2.5" fill="none" stroke="#17231B" stroke-width="2"/>
+      <circle cx="18" cy="6" r="2.5" fill="none" stroke="#17231B" stroke-width="2"/>
+      <circle cx="18" cy="18" r="2.5" fill="none" stroke="#17231B" stroke-width="2"/>
+      <path d="m8.2 10.8 7.6-3.7M8.2 13.2l7.6 3.7" class="line" stroke-width="1.8"/>
+    </g>
+
+    <g id="nav-browser">
+      <rect y="788" width="393" height="85" fill="#FFFDF5" stroke="#E0DED6" stroke-width="1"/>
+      <rect x="26" y="800" width="92" height="52" rx="20" fill="#FFD84D"/>
+      <g transform="translate(60 807) scale(.82)"><use href="#icon-browser"/></g>
+      <text x="72" y="845" class="nav-label center">Browser</text>
+      <g transform="translate(184 807) scale(.82)"><use href="#icon-download"/></g>
+      <text x="196" y="845" class="nav-label center" fill="#6B746E">Downloads</text>
+      <g transform="translate(309 807) scale(.82)"><use href="#icon-library"/></g>
+      <text x="321" y="845" class="nav-label center" fill="#6B746E">Library</text>
+      <rect x="146" y="863" width="101" height="4" rx="2" fill="#17231B"/>
+    </g>
+    <g id="nav-downloads">
+      <rect y="788" width="393" height="85" fill="#FFFDF5" stroke="#E0DED6" stroke-width="1"/>
+      <g transform="translate(60 807) scale(.82)"><use href="#icon-browser"/></g>
+      <text x="72" y="845" class="nav-label center" fill="#6B746E">Browser</text>
+      <rect x="144" y="800" width="104" height="52" rx="20" fill="#FFD84D"/>
+      <g transform="translate(184 807) scale(.82)"><use href="#icon-download"/></g>
+      <text x="196" y="845" class="nav-label center">Downloads</text>
+      <g transform="translate(309 807) scale(.82)"><use href="#icon-library"/></g>
+      <text x="321" y="845" class="nav-label center" fill="#6B746E">Library</text>
+      <rect x="146" y="863" width="101" height="4" rx="2" fill="#17231B"/>
+    </g>
+    <g id="nav-library">
+      <rect y="788" width="393" height="85" fill="#FFFDF5" stroke="#E0DED6" stroke-width="1"/>
+      <g transform="translate(60 807) scale(.82)"><use href="#icon-browser"/></g>
+      <text x="72" y="845" class="nav-label center" fill="#6B746E">Browser</text>
+      <g transform="translate(184 807) scale(.82)"><use href="#icon-download"/></g>
+      <text x="196" y="845" class="nav-label center" fill="#6B746E">Downloads</text>
+      <rect x="274" y="800" width="94" height="52" rx="20" fill="#FFD84D"/>
+      <g transform="translate(309 807) scale(.82)"><use href="#icon-library"/></g>
+      <text x="321" y="845" class="nav-label center">Library</text>
+      <rect x="146" y="863" width="101" height="4" rx="2" fill="#17231B"/>
+    </g>
+
+    <g id="library-underlay">
+      <rect width="393" height="873" fill="#FFFDF5"/>
+      <use href="#status-bar"/>
+      <text x="20" y="67" class="h1">Library</text>
+      <text x="20" y="88" class="small">5 videos  •  356 MB  •  Movies/BrightFetch</text>
+      <g transform="translate(20 116)">
+        <rect width="170" height="222" rx="18" fill="#FFFFFF" stroke="#DEDCD4"/>
+        <rect x="10" y="10" width="150" height="103" rx="13" fill="url(#thumb-a)"/>
+        <path d="M10 83c30-18 45-5 70-15 27-11 46-28 80-18v63H10z" fill="#2A4A3E" fill-opacity=".58"/>
+        <g transform="translate(72 49)"><use href="#icon-play"/></g>
+        <rect x="118" y="18" width="34" height="18" rx="6" fill="#17231B" fill-opacity=".82"/>
+        <text x="135" y="31" class="tiny center" fill="#FFFFFF">1080p</text>
+        <text x="12" y="139" class="body-med">Coastal morning</text>
+        <text x="12" y="158" class="small">MP4  •  03:42</text>
+        <text x="12" y="177" class="small">1920×1080  •  72 MB</text>
+        <g transform="translate(126 184) scale(.72)"><use href="#icon-share"/></g>
+        <g transform="translate(148 184) scale(.72)"><use href="#icon-trash"/></g>
+      </g>
+      <g transform="translate(203 116)">
+        <rect width="170" height="222" rx="18" fill="#FFFFFF" stroke="#DEDCD4"/>
+        <rect x="10" y="10" width="150" height="103" rx="13" fill="url(#thumb-b)"/>
+        <circle cx="126" cy="38" r="20" fill="#FFD84D" fill-opacity=".72"/>
+        <path d="M10 89c27-9 46-6 66-21 22-16 48-15 84 8v37H10z" fill="#314D63" fill-opacity=".7"/>
+        <g transform="translate(72 49)"><use href="#icon-play"/></g>
+        <rect x="122" y="18" width="30" height="18" rx="6" fill="#17231B" fill-opacity=".82"/>
+        <text x="137" y="31" class="tiny center" fill="#FFFFFF">720p</text>
+        <text x="12" y="139" class="body-med">City after rain</text>
+        <text x="12" y="158" class="small">MP4  •  01:18</text>
+        <text x="12" y="177" class="small">1280×720  •  41 MB</text>
+        <g transform="translate(126 184) scale(.72)"><use href="#icon-share"/></g>
+        <g transform="translate(148 184) scale(.72)"><use href="#icon-trash"/></g>
+      </g>
+      <g transform="translate(20 352)">
+        <rect width="170" height="222" rx="18" fill="#FFFFFF" stroke="#DEDCD4"/>
+        <rect x="10" y="10" width="150" height="103" rx="13" fill="url(#thumb-c)"/>
+        <path d="M10 77c34-28 68 9 100-12 18-12 34-14 50-3v51H10z" fill="#3B3145" fill-opacity=".58"/>
+        <g transform="translate(72 49)"><use href="#icon-play"/></g>
+        <rect x="122" y="18" width="30" height="18" rx="6" fill="#17231B" fill-opacity=".82"/>
+        <text x="137" y="31" class="tiny center" fill="#FFFFFF">720p</text>
+        <text x="12" y="139" class="body-med">Night market</text>
+        <text x="12" y="158" class="small">WEBM  •  04:10</text>
+        <text x="12" y="177" class="small">1280×720  •  96 MB</text>
+        <g transform="translate(126 184) scale(.72)"><use href="#icon-share"/></g>
+        <g transform="translate(148 184) scale(.72)"><use href="#icon-trash"/></g>
+      </g>
+      <g transform="translate(203 352)">
+        <rect width="170" height="222" rx="18" fill="#FFFFFF" stroke="#DEDCD4"/>
+        <rect x="10" y="10" width="150" height="103" rx="13" fill="#D7F1E2"/>
+        <circle cx="48" cy="45" r="24" fill="#FFD84D"/>
+        <path d="M10 93 55 62l28 19 28-32 49 40v24H10z" fill="#6D9884"/>
+        <g transform="translate(72 49)"><use href="#icon-play"/></g>
+        <rect x="122" y="18" width="30" height="18" rx="6" fill="#17231B" fill-opacity=".82"/>
+        <text x="137" y="31" class="tiny center" fill="#FFFFFF">480p</text>
+        <text x="12" y="139" class="body-med">Forest walk</text>
+        <text x="12" y="158" class="small">MP4  •  02:56</text>
+        <text x="12" y="177" class="small">854×480  •  28 MB</text>
+        <g transform="translate(126 184) scale(.72)"><use href="#icon-share"/></g>
+        <g transform="translate(148 184) scale(.72)"><use href="#icon-trash"/></g>
+      </g>
+      <use href="#nav-library"/>
+    </g>
+  </defs>
+
+  <rect width="1900" height="3040" fill="#F6F4EE"/>
+  <g transform="translate(74 42)">
+    <text class="board-kicker">BRIGHTFETCH · PRODUCT DESIGN SYSTEM</text>
+    <text y="43" class="board-title">Onboarding, downloads &amp; library states</text>
+    <text y="75" class="board-sub">Android · 393 × 873 frames · Roboto · accessible, user-authorized media workflow</text>
+  </g>
+  <g transform="translate(1517 47)">
+    <rect width="309" height="54" rx="18" fill="#FFFDF5" stroke="#DAD8D0"/>
+    <circle cx="24" cy="27" r="8" fill="#FFD84D"/><text x="42" y="32" class="small-med">Primary</text>
+    <circle cx="113" cy="27" r="8" fill="#D7F1E2"/><text x="131" y="32" class="small-med">Success</text>
+    <circle cx="220" cy="27" r="8" fill="#17231B"/><text x="238" y="32" class="small-med">Ink</text>
+  </g>
+
+  <!-- Row 1: onboarding and active download -->
+  <text x="74" y="154" class="state-label">01 · Welcome</text>
+  <text x="74" y="173" class="state-note">ONBOARDING · VALUE</text>
+  <g transform="translate(74 190)" filter="url(#phone-shadow)">
+    <rect width="393" height="873" rx="40" fill="#FFFDF5"/>
+    <g clip-path="url(#phone-clip)">
+      <rect width="393" height="873" fill="url(#onboard-bg)"/>
+      <circle cx="353" cy="172" r="108" fill="#FFD84D" fill-opacity=".18"/>
+      <circle cx="38" cy="518" r="126" fill="#D7F1E2" fill-opacity=".70"/>
+      <use href="#status-bar"/>
+      <g transform="translate(24 50)"><use href="#brand-mark"/></g>
+      <text x="82" y="79" class="h3">BrightFetch</text>
+      <text x="350" y="78" class="body-med end">Skip</text>
+      <g transform="translate(49 154)">
+        <rect width="295" height="314" rx="30" fill="#FFFFFF" stroke="#17231B" stroke-width="2" filter="url(#card-shadow)"/>
+        <rect x="20" y="20" width="255" height="34" rx="12" fill="#F6F4EE"/>
+        <circle cx="38" cy="37" r="5" fill="#FF8577"/><circle cx="54" cy="37" r="5" fill="#FFD84D"/><circle cx="70" cy="37" r="5" fill="#77C9A1"/>
+        <rect x="20" y="70" width="255" height="149" rx="18" fill="url(#thumb-a)"/>
+        <path d="M20 170c38-23 78 5 112-21 35-27 89-15 143 20v50H20z" fill="#2A4A3E" fill-opacity=".65"/>
+        <g transform="translate(136 132) scale(1.15)"><use href="#icon-play"/></g>
+        <rect x="20" y="238" width="255" height="56" rx="18" fill="#FFD84D" stroke="#17231B" stroke-width="2"/>
+        <g transform="translate(84 254) scale(.82)"><use href="#icon-download"/></g>
+        <text x="160" y="272" class="button center">Download video</text>
+      </g>
+      <text x="196.5" y="543" class="h1 center">Download with confidence</text>
+      <text x="196.5" y="580" class="body center">Save user-authorized public videos</text>
+      <text x="196.5" y="602" class="body center">without leaving your browser.</text>
+      <circle cx="178" cy="657" r="5" fill="#17231B"/><circle cx="197" cy="657" r="5" fill="#CAC7BD"/><circle cx="216" cy="657" r="5" fill="#CAC7BD"/>
+      <rect x="24" y="704" width="345" height="58" rx="20" fill="#17231B"/>
+      <text x="196.5" y="740" class="button center" fill="#FFFDF5">Next</text>
+      <text x="196.5" y="791" class="small center">Public, permitted media only</text>
+      <rect x="146" y="853" width="101" height="4" rx="2" fill="#17231B"/>
+    </g>
+    <rect width="393" height="873" rx="40" fill="none" stroke="#17231B" stroke-width="3"/>
+  </g>
+
+  <text x="527" y="154" class="state-label">02 · Quality choice</text>
+  <text x="527" y="173" class="state-note">ONBOARDING · CONTROL</text>
+  <g transform="translate(527 190)" filter="url(#phone-shadow)">
+    <rect width="393" height="873" rx="40" fill="#FFFDF5"/>
+    <g clip-path="url(#phone-clip)">
+      <rect width="393" height="873" fill="url(#onboard-bg)"/>
+      <circle cx="45" cy="188" r="110" fill="#D7F1E2" fill-opacity=".75"/>
+      <circle cx="354" cy="510" r="132" fill="#FFD84D" fill-opacity=".18"/>
+      <use href="#status-bar"/>
+      <g transform="translate(24 50)"><use href="#brand-mark"/></g>
+      <text x="82" y="79" class="h3">BrightFetch</text>
+      <text x="350" y="78" class="body-med end">Skip</text>
+      <g transform="translate(38 145)">
+        <rect width="317" height="329" rx="28" fill="#FFFFFF" stroke="#17231B" stroke-width="2" filter="url(#card-shadow)"/>
+        <text x="24" y="39" class="h3">Choose quality</text>
+        <text x="24" y="60" class="small">Coastal morning.mp4</text>
+        <g transform="translate(20 84)">
+          <rect width="277" height="58" rx="15" fill="#FFF7D2" stroke="#17231B" stroke-width="2"/>
+          <circle cx="24" cy="29" r="9" fill="#FFD84D" stroke="#17231B" stroke-width="2"/><circle cx="24" cy="29" r="3" fill="#17231B"/>
+          <text x="45" y="25" class="h3">1080p</text><text x="45" y="43" class="small">1920×1080 · Best</text>
+          <text x="255" y="34" class="body-med end">72 MB</text>
+        </g>
+        <g transform="translate(20 153)">
+          <rect width="277" height="58" rx="15" fill="#F6F4EE" stroke="#D2D0C8"/>
+          <circle cx="24" cy="29" r="9" fill="#FFFFFF" stroke="#8B938D" stroke-width="2"/>
+          <text x="45" y="25" class="h3">720p</text><text x="45" y="43" class="small">1280×720 · Balanced</text>
+          <text x="255" y="34" class="body-med end">41 MB</text>
+        </g>
+        <g transform="translate(20 222)">
+          <rect width="277" height="58" rx="15" fill="#F6F4EE" stroke="#D2D0C8"/>
+          <circle cx="24" cy="29" r="9" fill="#FFFFFF" stroke="#8B938D" stroke-width="2"/>
+          <text x="45" y="25" class="h3">480p</text><text x="45" y="43" class="small">854×480 · Data saver</text>
+          <text x="255" y="34" class="body-med end">24 MB</text>
+        </g>
+      </g>
+      <text x="196.5" y="550" class="h1 center">Pick the quality you want</text>
+      <text x="196.5" y="587" class="body center">Compare resolution and file size first.</text>
+      <text x="196.5" y="609" class="body center">You stay in control of every download.</text>
+      <circle cx="178" cy="657" r="5" fill="#CAC7BD"/><circle cx="197" cy="657" r="5" fill="#17231B"/><circle cx="216" cy="657" r="5" fill="#CAC7BD"/>
+      <rect x="24" y="704" width="345" height="58" rx="20" fill="#17231B"/>
+      <text x="196.5" y="740" class="button center" fill="#FFFDF5">Next</text>
+      <text x="196.5" y="791" class="small center">No surprises before you save</text>
+      <rect x="146" y="853" width="101" height="4" rx="2" fill="#17231B"/>
+    </g>
+    <rect width="393" height="873" rx="40" fill="none" stroke="#17231B" stroke-width="3"/>
+  </g>
+
+  <text x="980" y="154" class="state-label">03 · Ready offline</text>
+  <text x="980" y="173" class="state-note">ONBOARDING · COMPLETION</text>
+  <g transform="translate(980 190)" filter="url(#phone-shadow)">
+    <rect width="393" height="873" rx="40" fill="#FFFDF5"/>
+    <g clip-path="url(#phone-clip)">
+      <rect width="393" height="873" fill="url(#onboard-bg)"/>
+      <circle cx="346" cy="169" r="112" fill="#D7F1E2" fill-opacity=".8"/>
+      <circle cx="55" cy="528" r="126" fill="#FFD84D" fill-opacity=".18"/>
+      <use href="#status-bar"/>
+      <g transform="translate(24 50)"><use href="#brand-mark"/></g>
+      <text x="82" y="79" class="h3">BrightFetch</text>
+      <g transform="translate(40 144)">
+        <rect width="313" height="326" rx="30" fill="#FFFFFF" stroke="#17231B" stroke-width="2" filter="url(#card-shadow)"/>
+        <text x="22" y="38" class="h3">Your library</text><text x="291" y="38" class="small end">3 videos</text>
+        <g transform="translate(18 61)">
+          <rect width="132" height="111" rx="16" fill="url(#thumb-a)"/>
+          <path d="M0 78c23-16 45 2 65-13 22-17 43-11 67 7v39H0z" fill="#2A4A3E" fill-opacity=".62"/>
+          <g transform="translate(54 39)"><use href="#icon-play"/></g>
+          <text x="8" y="101" class="tiny" fill="#FFFFFF">03:42</text>
+        </g>
+        <g transform="translate(163 61)">
+          <rect width="132" height="111" rx="16" fill="url(#thumb-b)"/>
+          <path d="M0 83c35-16 67-4 85-24 18-19 34-12 47-4v56H0z" fill="#314D63" fill-opacity=".62"/>
+          <g transform="translate(54 39)"><use href="#icon-play"/></g>
+          <text x="8" y="101" class="tiny" fill="#FFFFFF">01:18</text>
+        </g>
+        <g transform="translate(18 185)">
+          <rect width="132" height="111" rx="16" fill="url(#thumb-c)"/>
+          <path d="M0 71c27-20 57 5 79-11 21-15 34-12 53-2v53H0z" fill="#3B3145" fill-opacity=".62"/>
+          <g transform="translate(54 39)"><use href="#icon-play"/></g>
+          <text x="8" y="101" class="tiny" fill="#FFFFFF">04:10</text>
+        </g>
+        <g transform="translate(163 185)">
+          <rect width="132" height="111" rx="16" fill="#D7F1E2" stroke="#B6D6C5" stroke-dasharray="5 5"/>
+          <path d="M66 38v36M48 56h36" class="line" stroke-width="3"/>
+          <text x="66" y="92" class="small-med center">Add another</text>
+        </g>
+      </g>
+      <text x="196.5" y="546" class="h1 center">Everything, one tap away</text>
+      <text x="196.5" y="583" class="body center">Play, share, or manage saved videos</text>
+      <text x="196.5" y="605" class="body center">from one tidy offline library.</text>
+      <circle cx="178" cy="657" r="5" fill="#CAC7BD"/><circle cx="197" cy="657" r="5" fill="#CAC7BD"/><circle cx="216" cy="657" r="5" fill="#17231B"/>
+      <rect x="24" y="704" width="345" height="58" rx="20" fill="#FFD84D" stroke="#17231B" stroke-width="2"/>
+      <text x="196.5" y="740" class="button center">Start browsing</text>
+      <text x="196.5" y="791" class="small center">Saved to Movies/BrightFetch</text>
+      <rect x="146" y="853" width="101" height="4" rx="2" fill="#17231B"/>
+    </g>
+    <rect width="393" height="873" rx="40" fill="none" stroke="#17231B" stroke-width="3"/>
+  </g>
+
+  <text x="1433" y="154" class="state-label">04 · Active downloads</text>
+  <text x="1433" y="173" class="state-note">DOWNLOADS · IN PROGRESS</text>
+  <g transform="translate(1433 190)" filter="url(#phone-shadow)">
+    <rect width="393" height="873" rx="40" fill="#FFFDF5"/>
+    <g clip-path="url(#phone-clip)">
+      <rect width="393" height="873" fill="#FFFDF5"/><use href="#status-bar"/>
+      <text x="20" y="67" class="h1">Downloads</text>
+      <text x="20" y="88" class="small">Background downloads and recent activity</text>
+      <g transform="translate(20 119)">
+        <rect width="353" height="188" rx="20" fill="#FFFFFF" stroke="#D9D7CF"/>
+        <rect x="14" y="14" width="56" height="56" rx="15" fill="#FFF0B8"/><g transform="translate(30 30)"><use href="#icon-download"/></g>
+        <text x="84" y="35" class="h3">Coastal morning · 1080p</text>
+        <text x="84" y="56" class="small" fill="#786000">Downloading · 7.2 MB/s</text>
+        <circle cx="324" cy="38" r="15" fill="#F6F4EE"/><path d="m318 32 12 12M330 32l-12 12" class="line" stroke-width="1.8"/>
+        <rect x="14" y="91" width="325" height="9" rx="4.5" fill="#EBE9E2"/>
+        <rect x="14" y="91" width="221" height="9" rx="4.5" fill="#FFD84D"/>
+        <circle cx="235" cy="95.5" r="7" fill="#17231B"/>
+        <text x="14" y="126" class="small-med">68%</text><text x="339" y="126" class="small end">48.7 MB / 71.6 MB</text>
+        <text x="14" y="158" class="small">About 4 seconds remaining</text>
+      </g>
+      <g transform="translate(20 323)">
+        <rect width="353" height="136" rx="20" fill="#FFFFFF" stroke="#D9D7CF"/>
+        <rect x="14" y="14" width="56" height="56" rx="15" fill="#F6F4EE"/><g transform="translate(30 30)"><use href="#icon-download"/></g>
+        <text x="84" y="35" class="h3">City after rain · 720p</text>
+        <text x="84" y="56" class="small" fill="#786000">Waiting for network</text>
+        <circle cx="324" cy="38" r="15" fill="#F6F4EE"/><path d="m318 32 12 12M330 32l-12 12" class="line" stroke-width="1.8"/>
+        <rect x="14" y="92" width="325" height="8" rx="4" fill="#EBE9E2"/>
+        <text x="14" y="122" class="small">Queued · 41 MB</text>
+      </g>
+      <g transform="translate(20 486)">
+        <rect width="353" height="86" rx="20" fill="#D7F1E2" stroke="#B7D8C6"/>
+        <circle cx="40" cy="43" r="19" fill="#FFFFFF"/><g transform="translate(28 31)"><use href="#icon-check"/></g>
+        <text x="70" y="37" class="body-med">Downloads continue in background</text>
+        <text x="70" y="58" class="small">You can safely browse or leave the app.</text>
+      </g>
+      <use href="#nav-downloads"/>
+    </g>
+    <rect width="393" height="873" rx="40" fill="none" stroke="#17231B" stroke-width="3"/>
+  </g>
+
+  <!-- Row 2: completed, failed, empty, cancelled -->
+  <text x="74" y="1114" class="state-label">05 · Completed</text>
+  <text x="74" y="1133" class="state-note">DOWNLOADS · SUCCESS</text>
+  <g transform="translate(74 1150)" filter="url(#phone-shadow)">
+    <rect width="393" height="873" rx="40" fill="#FFFDF5"/>
+    <g clip-path="url(#phone-clip)">
+      <rect width="393" height="873" fill="#FFFDF5"/><use href="#status-bar"/>
+      <text x="20" y="67" class="h1">Downloads</text><text x="20" y="88" class="small">Background downloads and recent activity</text>
+      <g transform="translate(20 119)">
+        <rect width="353" height="185" rx="20" fill="#FFFFFF" stroke="#B7D8C6" stroke-width="1.5"/>
+        <rect x="14" y="14" width="56" height="56" rx="15" fill="#D7F1E2"/><g transform="translate(30 30)"><use href="#icon-check"/></g>
+        <text x="84" y="35" class="h3">Coastal morning · 1080p</text><text x="84" y="56" class="small" fill="#18794E">Completed · just now</text>
+        <rect x="14" y="91" width="325" height="9" rx="4.5" fill="#D7F1E2"/><rect x="14" y="91" width="325" height="9" rx="4.5" fill="#5DA27E"/>
+        <text x="14" y="126" class="small-med">100%</text><text x="339" y="126" class="small end">71.6 MB</text>
+        <text x="14" y="155" class="small">Movies/BrightFetch/coastal-morning.mp4</text>
+      </g>
+      <g transform="translate(20 320)">
+        <rect width="353" height="152" rx="20" fill="#FFFFFF" stroke="#D9D7CF"/>
+        <rect x="14" y="14" width="56" height="56" rx="15" fill="#D7F1E2"/><g transform="translate(30 30)"><use href="#icon-check"/></g>
+        <text x="84" y="35" class="h3">City after rain · 720p</text><text x="84" y="56" class="small" fill="#18794E">Completed · 12 min ago</text>
+        <rect x="14" y="91" width="325" height="9" rx="4.5" fill="#5DA27E"/>
+        <text x="14" y="126" class="small-med">100%</text><text x="339" y="126" class="small end">41 MB</text>
+      </g>
+      <g transform="translate(20 500)">
+        <rect width="353" height="64" rx="18" fill="#17231B"/>
+        <text x="18" y="27" class="body-med" fill="#FFFFFF">Saved to your library</text><text x="18" y="47" class="small" fill="#C9D0CB">Ready to play offline</text>
+        <text x="331" y="38" class="button end" fill="#FFD84D">VIEW</text>
+      </g>
+      <use href="#nav-downloads"/>
+    </g><rect width="393" height="873" rx="40" fill="none" stroke="#17231B" stroke-width="3"/>
+  </g>
+
+  <text x="527" y="1114" class="state-label">06 · Failed</text>
+  <text x="527" y="1133" class="state-note">DOWNLOADS · RECOVERY</text>
+  <g transform="translate(527 1150)" filter="url(#phone-shadow)">
+    <rect width="393" height="873" rx="40" fill="#FFFDF5"/>
+    <g clip-path="url(#phone-clip)">
+      <rect width="393" height="873" fill="#FFFDF5"/><use href="#status-bar"/>
+      <text x="20" y="67" class="h1">Downloads</text><text x="20" y="88" class="small">Background downloads and recent activity</text>
+      <g transform="translate(20 119)">
+        <rect width="353" height="238" rx="20" fill="#FFF7F5" stroke="#D98D86" stroke-width="1.5"/>
+        <rect x="14" y="14" width="56" height="56" rx="15" fill="#FBE0DC"/><g transform="translate(30 30)"><use href="#icon-alert"/></g>
+        <text x="84" y="35" class="h3">Night market · 720p</text><text x="84" y="56" class="small" fill="#B23B32">Download failed</text>
+        <text x="14" y="102" class="body-med">The connection was interrupted.</text>
+        <text x="14" y="124" class="small">Nothing was added to your library.</text>
+        <rect x="14" y="149" width="201" height="52" rx="17" fill="#FFD84D" stroke="#17231B" stroke-width="1.5"/>
+        <path d="M37 175a10 10 0 1 1 3 7M37 175h-6v-6" class="line" stroke-width="1.8"/>
+        <text x="130" y="181" class="button center">Try again</text>
+        <rect x="226" y="149" width="113" height="52" rx="17" fill="#FFFFFF" stroke="#17231B" stroke-width="1.5"/>
+        <text x="282" y="181" class="button center">Remove</text>
+      </g>
+      <g transform="translate(20 384)">
+        <rect width="353" height="97" rx="18" fill="#F6F4EE" stroke="#D9D7CF"/>
+        <text x="16" y="30" class="body-med">Why did it fail?</text>
+        <text x="16" y="52" class="small">Check your connection and confirm the</text>
+        <text x="16" y="70" class="small">source video is still publicly available.</text>
+      </g>
+      <use href="#nav-downloads"/>
+    </g><rect width="393" height="873" rx="40" fill="none" stroke="#17231B" stroke-width="3"/>
+  </g>
+
+  <text x="980" y="1114" class="state-label">07 · Empty</text>
+  <text x="980" y="1133" class="state-note">DOWNLOADS · FIRST USE</text>
+  <g transform="translate(980 1150)" filter="url(#phone-shadow)">
+    <rect width="393" height="873" rx="40" fill="#FFFDF5"/>
+    <g clip-path="url(#phone-clip)">
+      <rect width="393" height="873" fill="#FFFDF5"/><use href="#status-bar"/>
+      <text x="20" y="67" class="h1">Downloads</text><text x="20" y="88" class="small">Background downloads and recent activity</text>
+      <g transform="translate(196.5 332)">
+        <circle r="72" fill="#D7F1E2"/><rect x="-39" y="-43" width="78" height="88" rx="22" fill="#FFFFFF" stroke="#17231B" stroke-width="2"/>
+        <g transform="translate(-12 -12)"><use href="#icon-download"/></g>
+        <circle cx="38" cy="-42" r="13" fill="#FFD84D" stroke="#17231B" stroke-width="2"/><text x="38" y="-37" class="small-med center">0</text>
+      </g>
+      <text x="196.5" y="449" class="h2 center">No downloads yet</text>
+      <text x="196.5" y="481" class="body center">Browse a page with a public video.</text>
+      <text x="196.5" y="502" class="body center">We’ll show you when one is detected.</text>
+      <rect x="91" y="539" width="211" height="54" rx="18" fill="#FFD84D" stroke="#17231B" stroke-width="1.5"/>
+      <g transform="translate(120 554) scale(.8)"><use href="#icon-browser"/></g><text x="213" y="572" class="button center">Browse videos</text>
+      <text x="196.5" y="625" class="small center">Only download media you’re allowed to save.</text>
+      <use href="#nav-downloads"/>
+    </g><rect width="393" height="873" rx="40" fill="none" stroke="#17231B" stroke-width="3"/>
+  </g>
+
+  <text x="1433" y="1114" class="state-label">08 · Cancelled</text>
+  <text x="1433" y="1133" class="state-note">DOWNLOADS · USER STOPPED</text>
+  <g transform="translate(1433 1150)" filter="url(#phone-shadow)">
+    <rect width="393" height="873" rx="40" fill="#FFFDF5"/>
+    <g clip-path="url(#phone-clip)">
+      <rect width="393" height="873" fill="#FFFDF5"/><use href="#status-bar"/>
+      <text x="20" y="67" class="h1">Downloads</text><text x="20" y="88" class="small">Background downloads and recent activity</text>
+      <g transform="translate(20 119)">
+        <rect width="353" height="209" rx="20" fill="#FFFFFF" stroke="#D9D7CF"/>
+        <rect x="14" y="14" width="56" height="56" rx="15" fill="#F6F4EE"/><circle cx="42" cy="42" r="12" fill="none" stroke="#727A74" stroke-width="2"/><path d="m34 34 16 16M50 34 34 50" stroke="#727A74" stroke-width="2" stroke-linecap="round"/>
+        <text x="84" y="35" class="h3">Forest walk · 480p</text><text x="84" y="56" class="small" fill="#6C756F">Cancelled by you</text>
+        <rect x="14" y="91" width="325" height="9" rx="4.5" fill="#EBE9E2"/>
+        <rect x="14" y="91" width="111" height="9" rx="4.5" fill="#AEB4AF"/>
+        <text x="14" y="126" class="small-med">34%</text><text x="339" y="126" class="small end">Partial file removed</text>
+        <rect x="14" y="145" width="150" height="46" rx="16" fill="#FFD84D" stroke="#17231B" stroke-width="1.5"/>
+        <text x="89" y="174" class="button center">Download again</text>
+        <text x="322" y="174" class="body-med end" fill="#6C756F">Dismiss</text>
+      </g>
+      <g transform="translate(20 354)">
+        <rect width="353" height="80" rx="18" fill="#F6F4EE" stroke="#D9D7CF"/>
+        <text x="16" y="31" class="body-med">Storage is clean</text><text x="16" y="54" class="small">No incomplete video was kept on your device.</text>
+        <g transform="translate(309 28)"><use href="#icon-check"/></g>
+      </g>
+      <use href="#nav-downloads"/>
+    </g><rect width="393" height="873" rx="40" fill="none" stroke="#17231B" stroke-width="3"/>
+  </g>
+
+  <!-- Row 3: library states -->
+  <text x="74" y="2074" class="state-label">09 · Library grid</text>
+  <text x="74" y="2093" class="state-note">LIBRARY · BROWSE</text>
+  <g transform="translate(74 2110)" filter="url(#phone-shadow)">
+    <rect width="393" height="873" rx="40" fill="#FFFDF5"/>
+    <g clip-path="url(#phone-clip)"><use href="#library-underlay"/></g>
+    <rect width="393" height="873" rx="40" fill="none" stroke="#17231B" stroke-width="3"/>
+  </g>
+
+  <text x="527" y="2074" class="state-label">10 · Library empty</text>
+  <text x="527" y="2093" class="state-note">LIBRARY · FIRST USE</text>
+  <g transform="translate(527 2110)" filter="url(#phone-shadow)">
+    <rect width="393" height="873" rx="40" fill="#FFFDF5"/>
+    <g clip-path="url(#phone-clip)">
+      <rect width="393" height="873" fill="#FFFDF5"/><use href="#status-bar"/>
+      <text x="20" y="67" class="h1">Library</text><text x="20" y="88" class="small">0 videos  •  0 B  •  Movies/BrightFetch</text>
+      <g transform="translate(196.5 328)">
+        <circle r="72" fill="#D7F1E2"/>
+        <rect x="-47" y="-38" width="94" height="76" rx="18" fill="#FFFFFF" stroke="#17231B" stroke-width="2"/>
+        <path d="M-34 23-7-4 11 12 31-14 47 3v35h-81z" fill="#8EB9A2"/>
+        <g transform="translate(-12 -12)"><use href="#icon-play"/></g>
+      </g>
+      <text x="196.5" y="443" class="h2 center">Your library is empty</text>
+      <text x="196.5" y="476" class="body center">Finished videos will appear here,</text><text x="196.5" y="497" class="body center">ready to play or share offline.</text>
+      <rect x="96" y="535" width="201" height="54" rx="18" fill="#FFD84D" stroke="#17231B" stroke-width="1.5"/>
+      <g transform="translate(122 550) scale(.8)"><use href="#icon-browser"/></g><text x="214" y="568" class="button center">Open browser</text>
+      <use href="#nav-library"/>
+    </g><rect width="393" height="873" rx="40" fill="none" stroke="#17231B" stroke-width="3"/>
+  </g>
+
+  <text x="980" y="2074" class="state-label">11 · Delete confirmation</text>
+  <text x="980" y="2093" class="state-note">LIBRARY · DESTRUCTIVE ACTION</text>
+  <g transform="translate(980 2110)" filter="url(#phone-shadow)">
+    <rect width="393" height="873" rx="40" fill="#FFFDF5"/>
+    <g clip-path="url(#phone-clip)">
+      <use href="#library-underlay"/>
+      <rect width="393" height="873" fill="#17231B" fill-opacity=".55"/>
+      <g transform="translate(24 262)" filter="url(#card-shadow)">
+        <rect width="345" height="296" rx="26" fill="#FFFDF5" stroke="#17231B" stroke-width="2"/>
+        <circle cx="54" cy="57" r="30" fill="#FBE0DC"/><g transform="translate(42 45)"><use href="#icon-trash"/></g>
+        <text x="24" y="116" class="h2">Delete this video?</text>
+        <text x="24" y="151" class="body">“Coastal morning.mp4” will be removed</text>
+        <text x="24" y="173" class="body">from your device. This can’t be undone.</text>
+        <rect x="24" y="215" width="136" height="54" rx="18" fill="#FFFFFF" stroke="#17231B" stroke-width="1.5"/>
+        <text x="92" y="248" class="button center">Cancel</text>
+        <rect x="173" y="215" width="148" height="54" rx="18" fill="#B23B32"/>
+        <text x="247" y="248" class="button center" fill="#FFFFFF">Delete</text>
+      </g>
+    </g><rect width="393" height="873" rx="40" fill="none" stroke="#17231B" stroke-width="3"/>
+  </g>
+
+  <text x="1433" y="2074" class="state-label">12 · Undo snackbar</text>
+  <text x="1433" y="2093" class="state-note">LIBRARY · REVERSIBLE FEEDBACK</text>
+  <g transform="translate(1433 2110)" filter="url(#phone-shadow)">
+    <rect width="393" height="873" rx="40" fill="#FFFDF5"/>
+    <g clip-path="url(#phone-clip)">
+      <use href="#library-underlay"/>
+      <g transform="translate(20 704)" filter="url(#card-shadow)">
+        <rect width="353" height="64" rx="18" fill="#17231B"/>
+        <circle cx="32" cy="32" r="14" fill="#D7F1E2"/><g transform="translate(24 24) scale(.67)"><use href="#icon-check"/></g>
+        <text x="57" y="28" class="body-med" fill="#FFFFFF">Video deleted</text>
+        <text x="57" y="47" class="small" fill="#C9D0CB">Coastal morning.mp4</text>
+        <text x="330" y="38" class="button end" fill="#FFD84D">UNDO</text>
+      </g>
+    </g><rect width="393" height="873" rx="40" fill="none" stroke="#17231B" stroke-width="3"/>
+  </g>
+
+  <text x="74" y="3018" class="state-note">BRIGHTFETCH · STATE COVERAGE BOARD 01 · EDITABLE SVG</text>
+  <text x="1826" y="3018" class="state-note end">v1.0 · 23 SEP 2026</text>
+</svg>

@@ -1,0 +1,18 @@
+{
+  "fileKey": "CLCW7nUO2zZhSbDfsxXRI8",
+  "run": "market-v3-20260924",
+  "mode": "editable-svg-import-browser-and-restored-official-connector",
+  "status": "all-15-compositions-imported-and-visually-verified",
+  "sourceCodeUsed": false,
+  "boards": [
+    {"name":"v3-01-capture","pageId":"0:1","nodeId":"16:2","x":3000,"y":0,"width":1872,"height":1290,"screens":4,"editableTextNodes":89,"secondaryColor":"#626D82"},
+    {"name":"v3-02-library","pageId":"2:2","nodeId":"19:281","x":3000,"y":0,"width":1872,"height":2280,"screens":6,"editableTextNodes":164},
+    {"name":"v3-03-player","pageId":"2:3","nodeId":"19:2","x":3000,"y":0,"width":1872,"height":1690,"screens":5,"editableTextNodes":96}
+  ],
+  "pendingBoards": [],
+  "blocker": null,
+  "connectorRestoredAt": "2026-09-25",
+  "validated": ["All three SVG files parse with xmllint", "All three local PNG renders visually reviewed", "All three direct Figma screenshots reviewed with no material clipping, missing media or overlap", "Page IDs, positions, sizes and editable text counts verified through official connector", "Main media title duration and file size synchronized", "Primary white contrast 5.37 and revised secondary text on canvas 4.95"],
+  "limitations": ["No native auto-layout component library", "No wired prototype"],
+  "preservation": "Prior designs remain in place. New boards are positioned separately."
+}

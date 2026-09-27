@@ -3,8 +3,9 @@
     <style name="Theme.BrightFetch" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">#FFFDF5</item>
-        <item name="android:navigationBarColor">#FFF6CE</item>
+        <item name="android:statusBarColor">#F8F9FC</item>
+        <item name="android:navigationBarColor">#F8F9FC</item>
+        <item name="android:windowBackground">#F8F9FC</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
 </resources>

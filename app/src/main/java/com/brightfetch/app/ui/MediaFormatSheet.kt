@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Refresh
@@ -56,7 +57,10 @@ import androidx.compose.ui.unit.sp
 import com.brightfetch.app.model.MediaCandidate
 import com.brightfetch.app.model.MediaDownloadOption
 import com.brightfetch.app.ui.theme.Ink
-import com.brightfetch.app.ui.theme.Mint
+import com.brightfetch.app.ui.theme.Hairline
+import com.brightfetch.app.ui.theme.Muted
+import com.brightfetch.app.ui.theme.SoftViolet
+import com.brightfetch.app.ui.theme.Violet
 import java.util.Locale
 import kotlin.math.roundToLong
 
@@ -100,11 +104,12 @@ internal fun MediaFormatSheet(
                 .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
         ) {
             Text(
-                text = "Choose download format",
+                text = "Make it yours.",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
-            Spacer(Modifier.height(12.dp))
+            Text("Choose the right quality for you.", color = Muted, fontSize = 14.sp)
+            Spacer(Modifier.height(16.dp))
             CandidateSummary(candidate)
             Spacer(Modifier.height(18.dp))
 
@@ -113,18 +118,10 @@ internal fun MediaFormatSheet(
                 errorMessage != null -> ErrorContent(errorMessage, onRetry)
                 options.isEmpty() -> EmptyContent(onRetry)
                 else -> {
-                    Text(
-                        text = "Available quality",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    Text("Available quality", style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                         options.forEach { option ->
                             FormatOptionCard(
                                 option = option,
@@ -133,9 +130,9 @@ internal fun MediaFormatSheet(
                             )
                         }
                     }
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(14.dp))
                     selectedOption?.let { option ->
-                        SelectedOptionDetails(
+                        ModernSelectedOptionDetails(
                             option = option,
                             onCopyLink = onCopyLink,
                             onDownload = onDownload,
@@ -158,7 +155,7 @@ private fun CandidateSummary(candidate: MediaCandidate) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier.size(48.dp).background(Mint, RoundedCornerShape(14.dp)),
+                modifier = Modifier.size(48.dp).background(SoftViolet, RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -170,7 +167,7 @@ private fun CandidateSummary(candidate: MediaCandidate) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = candidate.title.ifBlank { candidate.suggestedFileName },
+                text = candidate.title.ifBlank { candidate.suggestedFileName },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
@@ -257,182 +254,69 @@ private fun FormatOptionCard(
     onClick: () -> Unit,
 ) {
     val containerColor = when {
-        selected -> MaterialTheme.colorScheme.primaryContainer
-        option.isAvailable -> MaterialTheme.colorScheme.surfaceVariant
+        selected -> SoftViolet
+        option.isAvailable -> Color.White
         else -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
     }
     val borderColor = when {
         selected -> MaterialTheme.colorScheme.primary
-        option.isAvailable -> MaterialTheme.colorScheme.outlineVariant
+        option.isAvailable -> Hairline
         else -> MaterialTheme.colorScheme.error.copy(alpha = 0.55f)
     }
 
     Card(
         modifier = Modifier
-            .width(132.dp)
-            .heightIn(min = 76.dp)
+            .fillMaxWidth()
+            .heightIn(min = 68.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(17.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        border = BorderStroke(if (selected) 2.dp else 1.dp, borderColor),
+        border = BorderStroke(1.dp, borderColor),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 9.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = optionQualityLabel(option),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(6.dp))
-                ExtensionBadge(option.outputExtension)
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(20.dp).background(if (selected) Violet else Color.White, RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center) {
+                if (selected) Icon(Icons.Default.Check, contentDescription = null, tint = Color.White,
+                    modifier = Modifier.size(13.dp))
             }
-            Text(
-                text = if (option.isAvailable) optionSizeLabel(option) else "Unavailable",
-                color = if (option.isAvailable) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.error
-                },
-                fontWeight = if (option.isAvailable) FontWeight.Medium else FontWeight.Bold,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(optionQualityLabel(option), color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${option.outputExtension.uppercase(Locale.ROOT)} · ${optionResolution(option) ?: option.label}",
+                    color = Muted, fontSize = 11.sp, maxLines = 1)
+            }
+            Text(if (option.isAvailable) optionSizeLabel(option) else "Unavailable",
+                color = if (option.isAvailable) Ink else MaterialTheme.colorScheme.error,
+                fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
 @Composable
-private fun SelectedOptionDetails(
+private fun ModernSelectedOptionDetails(
     option: MediaDownloadOption,
     onCopyLink: (String) -> Unit,
     onDownload: (MediaDownloadOption) -> Unit,
 ) {
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    Spacer(Modifier.height(16.dp))
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ExtensionBadge(option.outputExtension)
-        Text(
-            text = optionQualityLabel(option),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = optionSizeLabel(option),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Medium,
-        )
-    }
-    Spacer(Modifier.height(10.dp))
-
-    val detailItems = listOfNotNull(
-        optionResolution(option),
-        formatBitrate(option),
-        formatDuration(option.durationSeconds),
-        option.segmentCount?.takeIf { it > 0 }?.let {
-            "$it video ${if (it == 1) "segment" else "segments"}"
-        },
-        option.codecs?.takeIf(String::isNotBlank)?.let { "Codec: $it" },
-    )
-    if (detailItems.isNotEmpty()) {
-        Text(
-            text = detailItems.joinToString("  •  "),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-        )
+    val details = listOfNotNull(optionResolution(option), formatBitrate(option),
+        formatDuration(option.durationSeconds), option.codecs?.takeIf(String::isNotBlank))
+    if (details.isNotEmpty()) {
+        Text(details.joinToString(" · "), color = Muted, fontSize = 11.sp, maxLines = 2)
         Spacer(Modifier.height(12.dp))
     }
-
-    Text(
-        text = "Download link",
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-    )
-    Spacer(Modifier.height(6.dp))
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-            SelectionContainer {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 104.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    Text(
-                        text = option.downloadUrl,
-                        style = MaterialTheme.typography.bodySmall,
-                        lineHeight = 17.sp,
-                    )
-                }
-            }
-            TextButton(
-                onClick = { onCopyLink(option.downloadUrl) },
-                modifier = Modifier.align(Alignment.End),
-            ) {
-                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(7.dp))
-                Text("Copy link")
-            }
-        }
-    }
-
-    option.unavailableReason?.let { reason ->
-        Spacer(Modifier.height(10.dp))
-        Text(
-            text = reason,
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-        )
-    }
-
-    Spacer(Modifier.height(14.dp))
-    Button(
-        onClick = { onDownload(option) },
-        enabled = option.isAvailable,
-        modifier = Modifier.fillMaxWidth().height(54.dp),
-        shape = RoundedCornerShape(18.dp),
-    ) {
+    option.unavailableReason?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+    Button(onClick = { onDownload(option) }, enabled = option.isAvailable,
+        modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(17.dp)) {
         Icon(Icons.Default.Download, contentDescription = null)
-        Spacer(Modifier.width(9.dp))
-        Text(
-            text = "Download Video",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
+        Spacer(Modifier.width(8.dp))
+        Text("Download · ${optionSizeLabel(option)}", fontWeight = FontWeight.Bold)
     }
-}
-
-@Composable
-private fun ExtensionBadge(extension: String) {
-    Text(
-        text = extension.trimStart('.').ifBlank { "VIDEO" }.uppercase(Locale.ROOT),
-        color = Color.White,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
-        maxLines = 1,
-        modifier = Modifier
-            .background(Color(0xFFF28B38), RoundedCornerShape(5.dp))
-            .padding(horizontal = 6.dp, vertical = 3.dp),
-    )
+    TextButton(onClick = { onCopyLink(option.downloadUrl) }, modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Copy source link")
+    }
 }
 
 private fun candidateSummaryLine(candidate: MediaCandidate): String {

@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="780" viewBox="0 0 2200 780">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#17231B" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#17231B"/>
+    </marker>
+    <style>
+      .title { font: 700 42px Roboto, Arial, sans-serif; fill: #17231B; }
+      .subtitle { font: 400 20px Roboto, Arial, sans-serif; fill: #526056; }
+      .step { font: 700 16px Roboto, Arial, sans-serif; fill: #526056; letter-spacing: 1.4px; }
+      .head { font: 700 24px Roboto, Arial, sans-serif; fill: #17231B; }
+      .body { font: 400 16px Roboto, Arial, sans-serif; fill: #526056; }
+      .tag { font: 700 14px Roboto, Arial, sans-serif; fill: #17231B; }
+      .note { font: 500 17px Roboto, Arial, sans-serif; fill: #17231B; }
+    </style>
+  </defs>
+  <rect width="2200" height="780" fill="#F6F4EE"/>
+  <rect x="56" y="48" width="2088" height="684" rx="32" fill="#FFFDF5" stroke="#D8DED8" stroke-width="2"/>
+  <g transform="translate(96 94)">
+    <rect x="0" y="0" width="58" height="58" rx="16" fill="#FFD84D" stroke="#17231B" stroke-width="2"/>
+    <path d="M29 14v21M20 27l9 9 9-9M18 43h22" fill="none" stroke="#17231B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="78" y="34" class="title">BrightFetch product flow</text>
+    <text x="78" y="66" class="subtitle">Code-aligned Android journey · original market-informed UX</text>
+  </g>
+
+  <g stroke="#17231B" stroke-width="3" fill="none" marker-end="url(#arrow)">
+    <path d="M310 350H385"/>
+    <path d="M570 350H645"/>
+    <path d="M830 350H905"/>
+    <path d="M1090 350H1165"/>
+    <path d="M1350 350H1425"/>
+    <path d="M1610 350H1685"/>
+    <path d="M1870 350H1945"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <g transform="translate(100 242)">
+      <rect width="210" height="216" rx="24" fill="#FFFFFF" stroke="#D8DED8" stroke-width="2"/>
+      <rect x="20" y="20" width="42" height="42" rx="12" fill="#FFD84D"/>
+      <text x="82" y="47" class="step">01</text>
+      <text x="20" y="96" class="head">Launch</text>
+      <text x="20" y="128" class="body">First-run education</text>
+      <text x="20" y="154" class="body">Legal-use notice</text>
+      <rect x="20" y="174" width="116" height="26" rx="13" fill="#D7F1E2"/>
+      <text x="34" y="192" class="tag">No account</text>
+    </g>
+    <g transform="translate(360 242)">
+      <rect width="210" height="216" rx="24" fill="#FFFFFF" stroke="#D8DED8" stroke-width="2"/>
+      <rect x="20" y="20" width="42" height="42" rx="12" fill="#FFD84D"/>
+      <text x="82" y="47" class="step">02</text>
+      <text x="20" y="96" class="head">Home</text>
+      <text x="20" y="128" class="body">Paste a video link</text>
+      <text x="20" y="154" class="body">or browse the web</text>
+      <rect x="20" y="174" width="136" height="26" rx="13" fill="#FFD84D"/>
+      <text x="34" y="192" class="tag">User initiated</text>
+    </g>
+    <g transform="translate(620 242)">
+      <rect width="210" height="216" rx="24" fill="#FFFFFF" stroke="#D8DED8" stroke-width="2"/>
+      <rect x="20" y="20" width="42" height="42" rx="12" fill="#D7F1E2"/>
+      <text x="82" y="47" class="step">03</text>
+      <text x="20" y="96" class="head">Browser</text>
+      <text x="20" y="128" class="body">Navigate in WebView</text>
+      <text x="20" y="154" class="body">Media sniffing runs</text>
+      <rect x="20" y="174" width="120" height="26" rx="13" fill="#F6F4EE"/>
+      <text x="34" y="192" class="tag">Tabs · history</text>
+    </g>
+    <g transform="translate(880 242)">
+      <rect width="210" height="216" rx="24" fill="#FFFFFF" stroke="#D8DED8" stroke-width="2"/>
+      <rect x="20" y="20" width="42" height="42" rx="12" fill="#FFD84D"/>
+      <text x="82" y="47" class="step">04</text>
+      <text x="20" y="96" class="head">Detected</text>
+      <text x="20" y="128" class="body">Media-found pill</text>
+      <text x="20" y="154" class="body">User taps Download</text>
+      <rect x="20" y="174" width="118" height="26" rx="13" fill="#D7F1E2"/>
+      <text x="34" y="192" class="tag">1 video found</text>
+    </g>
+    <g transform="translate(1140 242)">
+      <rect width="210" height="216" rx="24" fill="#FFFFFF" stroke="#D8DED8" stroke-width="2"/>
+      <rect x="20" y="20" width="42" height="42" rx="12" fill="#FFD84D"/>
+      <text x="82" y="47" class="step">05</text>
+      <text x="20" y="96" class="head">Quality</text>
+      <text x="20" y="128" class="body">1080p · 720p · 480p</text>
+      <text x="20" y="154" class="body">Size and format</text>
+      <rect x="20" y="174" width="132" height="26" rx="13" fill="#FFD84D"/>
+      <text x="34" y="192" class="tag">720p recommended</text>
+    </g>
+    <g transform="translate(1400 242)">
+      <rect width="210" height="216" rx="24" fill="#FFFFFF" stroke="#D8DED8" stroke-width="2"/>
+      <rect x="20" y="20" width="42" height="42" rx="12" fill="#D7F1E2"/>
+      <text x="82" y="47" class="step">06</text>
+      <text x="20" y="96" class="head">Downloads</text>
+      <text x="20" y="128" class="body">Progress · speed · ETA</text>
+      <text x="20" y="154" class="body">Retry or cancel</text>
+      <rect x="20" y="174" width="98" height="26" rx="13" fill="#F6F4EE"/>
+      <text x="34" y="192" class="tag">Active 2</text>
+    </g>
+    <g transform="translate(1660 242)">
+      <rect width="210" height="216" rx="24" fill="#FFFFFF" stroke="#D8DED8" stroke-width="2"/>
+      <rect x="20" y="20" width="42" height="42" rx="12" fill="#FFD84D"/>
+      <text x="82" y="47" class="step">07</text>
+      <text x="20" y="96" class="head">Library</text>
+      <text x="20" y="128" class="body">Search · sort · filter</text>
+      <text x="20" y="154" class="body">Play, share, delete</text>
+      <rect x="20" y="174" width="110" height="26" rx="13" fill="#D7F1E2"/>
+      <text x="34" y="192" class="tag">12 videos</text>
+    </g>
+    <g transform="translate(1920 242)">
+      <rect width="210" height="216" rx="24" fill="#17231B" stroke="#17231B" stroke-width="2"/>
+      <rect x="20" y="20" width="42" height="42" rx="12" fill="#FFD84D"/>
+      <text x="82" y="47" class="step" fill="#FFFDF5">08</text>
+      <text x="20" y="96" class="head" fill="#FFFDF5">Player</text>
+      <text x="20" y="128" class="body" fill="#D7F1E2">Portrait + landscape</text>
+      <text x="20" y="154" class="body" fill="#D7F1E2">Controls · lock · retry</text>
+      <rect x="20" y="174" width="104" height="26" rx="13" fill="#FFD84D"/>
+      <text x="34" y="192" class="tag">Offline-ready</text>
+    </g>
+  </g>
+
+  <g transform="translate(100 530)">
+    <rect width="2030" height="136" rx="24" fill="#D7F1E2"/>
+    <text x="28" y="42" class="step">KEY PRODUCT RULES</text>
+    <text x="28" y="82" class="note">Ask notification permission at the first download · Never auto-download clipboard content · Keep YouTube, DRM and live streams unsupported</text>
+    <text x="28" y="112" class="note">Technical codec, segment count and raw URL stay collapsed · Destructive actions require confirmation or Undo</text>
+  </g>
+</svg>

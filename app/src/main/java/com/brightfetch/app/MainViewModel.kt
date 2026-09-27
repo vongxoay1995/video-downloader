@@ -26,6 +26,7 @@ import com.brightfetch.app.model.MediaCandidate
 import com.brightfetch.app.model.MediaDownloadOption
 import com.brightfetch.app.model.MediaFormatInspectionState
 import com.brightfetch.app.storage.PublicVideoStore
+import com.brightfetch.app.storage.PlaybackStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
@@ -77,6 +78,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _playingVideo = MutableStateFlow<DownloadedVideo?>(null)
     val playingVideo: StateFlow<DownloadedVideo?> = _playingVideo.asStateFlow()
+
+    private val _playbackProgress = MutableStateFlow(PlaybackStore.read(application))
+    val playbackProgress = _playbackProgress.asStateFlow()
+
+    fun playbackStartPosition(video: DownloadedVideo): Long =
+        if (PlaybackStore.resumeEnabled(getApplication())) {
+            _playbackProgress.value[video.uri.toString()]?.takeIf { it.canResume }?.positionMillis ?: 0L
+        } else 0L
+
+    fun savePlaybackProgress(video: DownloadedVideo, position: Long, duration: Long) {
+        PlaybackStore.save(getApplication(), video.uri.toString(), position, duration)
+        _playbackProgress.value = PlaybackStore.read(getApplication())
+    }
 
     init {
         viewModelScope.launch {
@@ -473,10 +487,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         workManager.cancelWorkById(id)
     }
 
-    fun deleteVideo(video: DownloadedVideo) {
-        viewModelScope.launch(Dispatchers.IO) {
-            PublicVideoStore.delete(getApplication(), video)
+    fun deleteVideo(video: DownloadedVideo, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val deleted = withContext(Dispatchers.IO) { PublicVideoStore.delete(getApplication(), video) }
+            if (deleted) {
+                PlaybackStore.remove(getApplication(), video.uri.toString())
+                _playbackProgress.value = PlaybackStore.read(getApplication())
+            }
             refreshVideos()
+            onResult(deleted)
         }
     }
 
@@ -504,9 +523,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     state = info.state,
                     progress = info.progress.getInt(DownloadContract.KEY_PROGRESS, if (info.state == WorkInfo.State.SUCCEEDED) 100 else 0),
                     downloadedBytes = info.progress.getLong(DownloadContract.KEY_DOWNLOADED, 0L),
-                    totalBytes = info.progress.getLong(DownloadContract.KEY_TOTAL, 0L),
+                    totalBytes = info.outputData.getLong(DownloadContract.KEY_TOTAL,
+                        info.progress.getLong(DownloadContract.KEY_TOTAL, 0L)),
                     error = info.outputData.getString(DownloadContract.KEY_ERROR),
                     outputPath = info.outputData.getString(DownloadContract.KEY_OUTPUT_PATH),
+                    outputUri = info.outputData.getString(DownloadContract.KEY_OUTPUT_URI),
                 )
             }
     }

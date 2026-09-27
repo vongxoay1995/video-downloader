@@ -5,25 +5,29 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-val SunnyYellow = Color(0xFFFFD84D)
-val WarmCream = Color(0xFFFFFDF5)
-val Mint = Color(0xFFD7F1E2)
-val Ink = Color(0xFF17231B)
-val SoftSurface = Color(0xFFF6F4EE)
+val Violet = Color(0xFF6153E8)
+val Canvas = Color(0xFFF8F9FC)
+val Ink = Color(0xFF192136)
+val Muted = Color(0xFF626D82)
+val Hairline = Color(0xFFE7EAF2)
+val SoftViolet = Color(0xFFEEEBFF)
+val Success = Color(0xFF167D66)
+val SoftSuccess = Color(0xFFE0F5EE)
 
 private val BrightFetchColors = lightColorScheme(
-    primary = Ink,
+    primary = Violet,
     onPrimary = Color.White,
-    primaryContainer = Mint,
+    primaryContainer = SoftViolet,
     onPrimaryContainer = Ink,
-    secondary = Color(0xFF5D6F63),
-    background = WarmCream,
+    secondary = Muted,
+    background = Canvas,
     onBackground = Ink,
     surface = Color.White,
     onSurface = Ink,
-    surfaceVariant = SoftSurface,
-    onSurfaceVariant = Color(0xFF526056),
-    error = Color(0xFFBA1A1A),
+    surfaceVariant = SoftViolet,
+    onSurfaceVariant = Muted,
+    outlineVariant = Hairline,
+    error = Color(0xFFBC4247),
 )
 
 @Composable

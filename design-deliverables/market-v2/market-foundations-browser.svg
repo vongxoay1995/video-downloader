@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2350" height="1240" viewBox="0 0 2350 1240" role="img" aria-labelledby="title desc">
+  <title id="title">Droply market-first foundations and browser flow</title>
+  <desc id="desc">An editable modern Android UI board with visual foundations, paste-link home, browser discovery, detected media, and quality selection.</desc>
+  <defs>
+    <style><![CDATA[
+      svg{color:#171821}text{font-family:"Roboto Flex",Roboto,Arial,sans-serif}
+      .kicker{font-size:13px;font-weight:800;letter-spacing:2.2px;fill:#69676D}
+      .board-title{font-size:43px;font-weight:800;letter-spacing:-1.6px}
+      .board-sub{font-size:16px;font-weight:500;fill:#6E7180}
+      .label{font-size:12px;font-weight:800;letter-spacing:1.4px;fill:#77747A}
+      .display{font-size:42px;font-weight:850;letter-spacing:-1.7px}
+      .h1{font-size:29px;font-weight:850;letter-spacing:-.9px}
+      .h2{font-size:21px;font-weight:800;letter-spacing:-.35px}
+      .h3{font-size:16px;font-weight:800}
+      .body{font-size:14px;font-weight:500}
+      .body2{font-size:13px;font-weight:500;fill:#6E7180}
+      .small{font-size:11px;font-weight:600;fill:#6E7180}
+      .tiny{font-size:9px;font-weight:800;letter-spacing:.4px}
+      .button{font-size:14px;font-weight:800}
+      .nav{font-size:10px;font-weight:750}
+      .center{text-anchor:middle}.end{text-anchor:end}
+      .line{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+      .mutedline{fill:none;stroke:#79767D;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+      #foundations .label,#foundations .body2,#foundations .small{fill:#C9CBD6}
+    ]]></style>
+    <filter id="phoneShadow" x="-20%" y="-10%" width="140%" height="135%"><feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#29262F" flood-opacity=".13"/></filter>
+    <filter id="cardShadow" x="-20%" y="-30%" width="140%" height="170%"><feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#29262F" flood-opacity=".11"/></filter>
+    <linearGradient id="heroGrad" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#D9FF57"/><stop offset=".48" stop-color="#E5F7A5"/><stop offset="1" stop-color="#E9E5FF"/></linearGradient>
+    <linearGradient id="thumbSky" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#BCEBFF"/><stop offset="1" stop-color="#6EA6DD"/></linearGradient>
+    <linearGradient id="thumbLav" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#DED4FF"/><stop offset="1" stop-color="#8A74D8"/></linearGradient>
+    <linearGradient id="thumbLime" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#E8FF9A"/><stop offset="1" stop-color="#8DBD18"/></linearGradient>
+    <clipPath id="phoneClip"><rect width="393" height="873" rx="38"/></clipPath>
+    <g id="status">
+      <text x="24" y="24" class="small" fill="#171821">9:41</text>
+      <path d="M325 19c4.4-5 10.6-5 15 0M330 22c1.7-2 3.4-2 5 0" class="line" stroke-width="1.5"/>
+      <rect x="349" y="14" width="18" height="10" rx="3" fill="none" stroke="#171821" stroke-width="1.5"/><rect x="368" y="17" width="2" height="4" rx="1" fill="#171821"/><rect x="351.5" y="16.5" width="11" height="5" rx="1.2" fill="#171821"/>
+    </g>
+    <g id="brand">
+      <path d="M4 8Q4 4 8 4h21q7 0 7 7v17q0 8-8 8H11q-7 0-7-7z" fill="#6558F5" stroke="#171821" stroke-width="2"/>
+      <path d="M20 10v13m-6-5 6 6 6-6M13 30h14" class="line" stroke-width="2.5"/>
+    </g>
+    <g id="iconHome"><path d="m3 11 9-8 9 8v10H15v-6H9v6H3z" class="line"/></g>
+    <g id="iconBrowser"><rect x="2" y="3" width="20" height="18" rx="5" class="line"/><path d="M2 9h20M6 6h.01M10 6h.01" class="line"/></g>
+    <g id="iconDownload"><path d="M12 2v13M7 11l5 5 5-5M4 21h16" class="line"/></g>
+    <g id="iconLibrary"><rect x="2" y="3" width="8" height="8" rx="2" class="line"/><rect x="14" y="3" width="8" height="8" rx="2" class="line"/><rect x="2" y="15" width="8" height="8" rx="2" class="line"/><rect x="14" y="15" width="8" height="8" rx="2" class="line"/></g>
+    <g id="iconSearch"><circle cx="10" cy="10" r="7" class="line"/><path d="m15.5 15.5 6 6" class="line"/></g>
+    <g id="iconLink"><path d="m9 15 6-6m-8 9H5a5 5 0 0 1 0-10h4m6 0h4a5 5 0 0 1 0 10h-4" class="line"/></g>
+    <g id="iconPlay"><circle cx="12" cy="12" r="11" fill="#171821"/><path d="m10 7 7 5-7 5z" fill="#6558F5"/></g>
+    <g id="iconSpark"><path d="M12 2c1.2 5.2 3.7 7.8 9 9-5.3 1.2-7.8 3.8-9 9-1.2-5.2-3.7-7.8-9-9 5.3-1.2 7.8-3.8 9-9z" fill="#171821"/></g>
+    <g id="navHome" style="color:#FFFFFF">
+      <rect x="20" y="792" width="353" height="64" rx="32" fill="#171821" filter="url(#cardShadow)"/>
+      <rect x="29" y="800" width="104" height="48" rx="24" fill="#6558F5"/>
+      <g transform="translate(46 811) scale(.72)"><use href="#iconHome"/></g><text x="92" y="829" class="nav center" fill="#FFFFFF">Home</text>
+      <g transform="translate(194 811) scale(.72)"><use href="#iconDownload"/></g><text x="206" y="846" class="tiny center" fill="#FFFFFF">DOWNLOADS</text>
+      <g transform="translate(314 811) scale(.72)"><use href="#iconLibrary"/></g><text x="326" y="846" class="tiny center" fill="#FFFFFF">LIBRARY</text>
+    </g>
+    <g id="browserDock" style="color:#FFFFFF">
+      <rect x="20" y="792" width="353" height="64" rx="32" fill="#171821" filter="url(#cardShadow)"/>
+      <path d="m51 824-8-7m8 7-8 7" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+      <path d="m103 824 8-7m-8 7 8 7" fill="none" stroke="#777A86" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="196" cy="824" r="21" fill="#6558F5"/><path d="M196 814v14m-5-5 5 6 5-6M190 834h12" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <g transform="translate(273 812) scale(.72)"><use href="#iconHome"/></g><rect x="327" y="816" width="22" height="17" rx="5" fill="none" stroke="#FFFFFF" stroke-width="2"/><text x="338" y="829" class="tiny center" fill="#FFFFFF">2</text>
+    </g>
+    <g id="phoneBase"><rect width="393" height="873" rx="38" fill="#F7F7FC" stroke="#D8D4CE" stroke-width="1.2" filter="url(#phoneShadow)"/></g>
+  </defs>
+
+  <rect width="2350" height="1240" fill="#EFEFF8"/>
+  <circle cx="2195" cy="40" r="210" fill="#6558F5" fill-opacity=".33"/><circle cx="2255" cy="1120" r="260" fill="#E9E5FF" fill-opacity=".28"/>
+  <text x="42" y="50" class="kicker">MARKET-FIRST CONCEPT • 2026</text>
+  <text x="42" y="96" class="board-title">Droply / expressive utility</text>
+  <text x="42" y="126" class="board-sub">Independent concept — fast intent, clear trust, playful confidence. No platform branding or borrowed UI.</text>
+
+  <!-- Foundations rail -->
+  <g id="foundations" transform="translate(42 192)">
+    <rect width="438" height="932" rx="34" fill="#171821"/>
+    <text x="28" y="42" class="label" style="fill:#39D9B4">01 / SYSTEM</text>
+    <text x="28" y="81" font-size="30" font-weight="850" fill="#FFFFFF" letter-spacing="-1">Bold, calm, useful.</text>
+    <text x="28" y="109" class="body2" fill="#C9CBD6">Graphite structure + optimistic energy.</text>
+    <text x="28" y="153" class="label" fill="#C9CBD6">COLOR TOKENS</text>
+    <g transform="translate(28 172)">
+      <rect width="80" height="80" rx="23" fill="#6558F5"/><text x="40" y="102" class="tiny center" fill="#FFFFFF">VIOLET</text>
+      <rect x="96" width="80" height="80" rx="23" fill="#39D9B4"/><text x="136" y="102" class="tiny center" fill="#FFFFFF">MINT</text>
+      <rect x="192" width="80" height="80" rx="23" fill="#E9E5FF"/><text x="232" y="102" class="tiny center" fill="#FFFFFF">LAVENDER</text>
+      <rect x="288" width="80" height="80" rx="23" fill="#F7F7FC"/><text x="328" y="102" class="tiny center" fill="#FFFFFF">CLOUD</text>
+    </g>
+    <text x="28" y="316" class="label" fill="#C9CBD6">TYPE SCALE</text>
+    <text x="28" y="365" font-size="42" font-weight="850" fill="#FFFFFF" letter-spacing="-1.6">Download better.</text>
+    <text x="28" y="398" font-size="22" font-weight="800" fill="#FFFFFF">One tap from link to offline.</text>
+    <text x="28" y="426" class="body" fill="#C9CBD6">Roboto Flex / 850 headlines / 500 body</text>
+    <text x="28" y="472" class="label" fill="#C9CBD6">CORE COMPONENTS</text>
+    <g transform="translate(28 491)">
+      <rect width="174" height="54" rx="20" fill="#6558F5"/><text x="87" y="34" class="button center" fill="#FFFFFF">Paste &amp; scan</text>
+      <rect x="190" width="164" height="54" rx="20" fill="none" stroke="#F5F3F0" stroke-width="1.5"/><text x="272" y="34" class="button center" fill="#FFFFFF">Open browser</text>
+      <rect y="70" width="354" height="60" rx="22" fill="#2C2B2F"/><g transform="translate(18 88) scale(.8)" style="color:#FFFFFF"><use href="#iconLink"/></g><text x="56" y="106" class="body" fill="#FFFFFF">Paste a video link</text><rect x="288" y="80" width="56" height="40" rx="16" fill="#6558F5"/><text x="316" y="105" class="tiny center" fill="#FFFFFF">PASTE</text>
+      <rect y="146" width="226" height="45" rx="22.5" fill="#6558F5"/><circle cx="24" cy="168.5" r="14" fill="#FFFFFF"/><path d="M19 168.5h10m-5-5v10" stroke="#6558F5" stroke-width="2" stroke-linecap="round"/><text x="129" y="174" class="button center" fill="#FFFFFF">Video found • 1</text>
+    </g>
+    <text x="28" y="730" class="label" fill="#C9CBD6">MARKET SIGNALS</text>
+    <text x="28" y="760" class="body" fill="#FFFFFF">InShot / 1DM / AhaSave benchmark</text>
+    <text x="28" y="787" class="body2" fill="#C9CBD6">• Paste + browser entry</text>
+    <text x="28" y="809" class="body2" fill="#C9CBD6">• Auto-detect + format chooser</text>
+    <text x="28" y="831" class="body2" fill="#C9CBD6">• Queue + offline library</text>
+    <text x="28" y="861" class="small" style="fill:#FFB8A8">Pain: ads, dense controls, permission anxiety.</text>
+    <rect x="28" y="880" width="354" height="1" fill="#3F3D43"/>
+    <text x="28" y="908" class="small" style="fill:#39D9B4">Droply: a calm offline media inbox.</text>
+    <text x="28" y="925" class="small" style="fill:#39D9B4">Transparent status, playful but not noisy.</text>
+  </g>
+
+  <!-- Screen labels -->
+  <g transform="translate(520 172)"><text class="label">01 / QUICK START</text><text y="24" class="h3">Paste-first home</text></g>
+  <g transform="translate(954 172)"><text class="label">02 / DISCOVERY</text><text y="24" class="h3">Focused browser</text></g>
+  <g transform="translate(1388 172)"><text class="label">03 / DETECTION</text><text y="24" class="h3">Media found</text></g>
+  <g transform="translate(1822 172)"><text class="label">04 / DECISION</text><text y="24" class="h3">Quality chooser</text></g>
+
+  <!-- Phone 1: paste-first -->
+  <g id="screen-quick-start" transform="translate(520 214)">
+    <use href="#phoneBase"/>
+    <g clip-path="url(#phoneClip)">
+      <rect width="393" height="873" fill="#F7F7FC"/><use href="#status"/>
+      <g transform="translate(22 46)"><use href="#brand"/></g><text x="70" y="72" class="h3">Droply</text>
+      <circle cx="351" cy="65" r="19" fill="#ECE9E3"/><circle cx="351" cy="61" r="4" fill="#171821"/><path d="M343 72c2-7 14-7 16 0" class="line" stroke-width="1.8"/>
+      <rect x="18" y="106" width="357" height="265" rx="34" fill="#E9E5FF"/>
+      <circle cx="320" cy="138" r="39" fill="#FFFFFF" fill-opacity=".45"/><path d="M293 330c21-58 57-91 82-104v145h-82z" fill="#171821" fill-opacity=".1"/>
+      <text x="39" y="159" class="small" fill="#171821">YOUR OFFLINE POCKET</text>
+      <text x="39" y="209" class="display">Save it.</text><text x="39" y="254" class="display">Watch later.</text>
+      <text x="39" y="291" class="body">A clean way to keep videos you’re</text><text x="39" y="312" class="body">allowed to download.</text>
+      <g transform="translate(304 292) scale(1.55)"><use href="#iconSpark"/></g>
+      <text x="20" y="414" class="label">PASTE A LINK</text>
+      <rect x="20" y="431" width="353" height="66" rx="23" fill="#FFFFFF" stroke="#DAD6CF"/>
+      <g transform="translate(38 451) scale(.85)"><use href="#iconLink"/></g><text x="76" y="470" class="body2">https://example.com/video</text>
+      <rect x="20" y="510" width="353" height="58" rx="21" fill="#171821"/><text x="176" y="546" class="button center" fill="#FFFFFF">Paste &amp; scan</text><circle cx="334" cy="539" r="18" fill="#6558F5"/><path d="m329 532 8 7-8 7" class="line" stroke-width="2.2"/>
+      <g transform="translate(20 593)"><rect width="172" height="126" rx="27" fill="#E9E5FF"/><circle cx="36" cy="36" r="19" fill="#171821"/><g transform="translate(25 25) scale(.9)" style="color:#FFFFFF"><use href="#iconBrowser"/></g><text x="20" y="79" class="h3">Browse privately</text><text x="20" y="101" class="small" fill="#171821">Find media as you go</text></g>
+      <g transform="translate(201 593)"><rect width="172" height="126" rx="27" fill="#C6F6EE"/><circle cx="36" cy="36" r="19" fill="#171821"/><g transform="translate(25 25) scale(.9)" style="color:#FFFFFF"><use href="#iconDownload"/></g><text x="20" y="79" class="h3">Smart queue</text><text x="20" y="101" class="small" fill="#171821">Visible speed &amp; ETA</text></g>
+      <rect x="20" y="739" width="353" height="38" rx="19" fill="#EFECE7"/><circle cx="40" cy="758" r="5" fill="#5CB774"/><text x="54" y="763" class="small">No clipboard reads until you tap Paste</text>
+      <use href="#navHome"/>
+    </g>
+  </g>
+
+  <!-- Phone 2: browser -->
+  <g id="screen-browser" transform="translate(954 214)">
+    <use href="#phoneBase"/>
+    <g clip-path="url(#phoneClip)"><rect width="393" height="873" fill="#F7F7FC"/><use href="#status"/>
+      <path d="m28 61 8-8m-8 8 8 8" class="line"/><rect x="54" y="43" width="286" height="45" rx="20" fill="#ECE9E3"/><circle cx="76" cy="65" r="6" fill="none" stroke="#6F6C72" stroke-width="1.7"/><path d="m80 69 5 5" class="mutedline"/><text x="95" y="70" class="body2">Search or enter address</text><circle cx="363" cy="65" r="18" fill="#171821"/><text x="363" y="71" class="h3 center" fill="#FFFFFF">2</text>
+      <rect x="0" y="104" width="393" height="530" fill="#FFFFFF"/>
+      <text x="20" y="145" class="small">CREATIVE JOURNAL</text><text x="20" y="185" class="h1">Small rituals,</text><text x="20" y="216" class="h1">big reset.</text>
+      <rect x="20" y="243" width="353" height="202" rx="29" fill="url(#thumbSky)"/><circle cx="291" cy="300" r="52" fill="#6558F5" fill-opacity=".85"/><path d="M20 399c65-86 117-35 181-87 53-43 108-41 172 17v116H20z" fill="#24374D" fill-opacity=".62"/><g transform="translate(174 328) scale(1.9)"><use href="#iconPlay"/></g>
+      <text x="20" y="486" class="h2">A minute by the sea</text><text x="20" y="510" class="body2">04:28 • travel notes • today</text>
+      <rect x="20" y="542" width="169" height="72" rx="22" fill="#EEE9FF"/><text x="36" y="571" class="small">NEXT STORY</text><text x="36" y="594" class="h3">Quiet mornings</text>
+      <rect x="204" y="542" width="169" height="72" rx="22" fill="#E6F7FF"/><text x="220" y="571" class="small">PLAYLIST</text><text x="220" y="594" class="h3">Fresh finds</text>
+      <g id="detection-dock" style="color:#FFFFFF"><rect x="20" y="651" width="353" height="116" rx="28" fill="#171821" filter="url(#cardShadow)"/><circle cx="54" cy="685" r="19" fill="#6558F5"/><path d="M54 674v15m-6-5 6 6 6-6M47 695h14" class="line" stroke-width="1.7"/><text x="84" y="681" class="small" style="fill:#C9CBD6">READY WHEN YOU ARE</text><text x="84" y="705" class="h3" fill="#FFFFFF">Video detected</text><text x="84" y="728" class="body2" style="fill:#C9CBD6">MP4 • 04:28 • 3 qualities</text><rect x="265" y="674" width="89" height="55" rx="20" fill="#6558F5"/><text x="309" y="707" class="button center" fill="#FFFFFF">Choose</text><text x="196" y="753" class="small center" style="fill:#9EA0AC">Only download content you have rights to use</text></g>
+      <use href="#browserDock"/>
+    </g>
+  </g>
+
+  <!-- Phone 3: detected media -->
+  <g id="screen-detected" transform="translate(1388 214)">
+    <use href="#phoneBase"/>
+    <g clip-path="url(#phoneClip)"><rect width="393" height="873" fill="#F7F7FC"/><use href="#status"/>
+      <path d="m27 62 8-8m-8 8 8 8" class="line"/><text x="55" y="69" class="h3">Detected media</text><circle cx="354" cy="62" r="20" fill="#ECE9E3"/><path d="M347 62h14M354 55v14" class="line"/>
+      <text x="20" y="116" class="h1">We found 2 videos.</text><text x="20" y="144" class="body2">Pick one to see available formats.</text>
+      <g transform="translate(20 177)">
+        <rect width="353" height="214" rx="29" fill="#FFFFFF" stroke="#DEDBD5"/>
+        <rect x="12" y="12" width="329" height="126" rx="22" fill="url(#thumbLav)"/><circle cx="265" cy="48" r="28" fill="#6558F5" fill-opacity=".88"/><path d="M12 100c58-49 106-19 157-51 54-33 112-18 172 33v56H12z" fill="#352D50" fill-opacity=".56"/><g transform="translate(164 63)"><use href="#iconPlay"/></g>
+        <text x="18" y="167" class="h3">A minute by the sea</text><text x="18" y="190" class="body2">04:28 • 3 qualities</text><rect x="287" y="157" width="48" height="36" rx="15" fill="#6558F5"/><path d="m304 169 7 7-7 7" class="line"/>
+      </g>
+      <g transform="translate(20 409)"><rect width="353" height="164" rx="29" fill="#FFFFFF" stroke="#DEDBD5"/><rect x="12" y="12" width="130" height="140" rx="22" fill="url(#thumbLime)"/><path d="M12 104c35-44 68-36 130-76v124H12z" fill="#334311" fill-opacity=".52"/><g transform="translate(65 64)"><use href="#iconPlay"/></g><text x="162" y="48" class="h3">Behind the frame</text><text x="162" y="74" class="body2">01:12 • 2 qualities</text><rect x="162" y="100" width="108" height="40" rx="17" fill="#EEE9FF"/><text x="216" y="125" class="small center" fill="#171821">View formats</text></g>
+      <rect x="20" y="598" width="353" height="107" rx="26" fill="#E9E5FF"/><circle cx="52" cy="632" r="18" fill="#171821"/><g transform="translate(41 621) scale(.9)"><use href="#iconSpark"/></g><text x="82" y="629" class="h3">Smart pick</text><text x="82" y="652" class="body2" fill="#171821">1080p balances quality and size</text><text x="82" y="674" class="small" fill="#171821">You can change this before downloading</text>
+      <text x="20" y="748" class="small">Can’t find the right clip?</text><text x="373" y="748" class="small end" fill="#171821">Scan again</text>
+      <use href="#browserDock"/>
+    </g>
+  </g>
+
+  <!-- Phone 4: quality sheet -->
+  <g id="screen-quality" transform="translate(1822 214)">
+    <use href="#phoneBase"/>
+    <g clip-path="url(#phoneClip)"><rect width="393" height="873" fill="#F1EFEB"/><use href="#status"/>
+      <text x="22" y="67" class="h3">A minute by the sea</text><circle cx="353" cy="62" r="19" fill="#E3E0DB"/><path d="m347 56 12 12m0-12-12 12" class="line"/>
+      <rect x="20" y="102" width="353" height="228" rx="31" fill="url(#thumbSky)"/><circle cx="304" cy="153" r="37" fill="#6558F5"/><path d="M20 279c66-78 130-44 195-96 57-46 103-26 158 16v131H20z" fill="#283A50" fill-opacity=".58"/><g transform="translate(174 199) scale(1.9)"><use href="#iconPlay"/></g>
+      <rect x="0" y="0" width="393" height="873" fill="#171821" fill-opacity=".38"/>
+      <g transform="translate(0 290)">
+        <path d="M0 75Q0 35 40 35h313q40 0 40 40v508H0z" fill="#F7F7FC"/>
+        <rect x="166" y="50" width="61" height="5" rx="3" fill="#C7C2BC"/>
+        <text x="22" y="101" class="label">CHOOSE QUALITY</text><text x="22" y="138" class="h1">Make it yours.</text><text x="22" y="163" class="body2">Higher quality uses more storage.</text>
+        <g transform="translate(20 190)"><rect width="353" height="88" rx="24" fill="#171821"/><rect x="14" y="14" width="60" height="60" rx="19" fill="#6558F5"/><text x="44" y="51" class="h3 center" fill="#FFFFFF">BEST</text><text x="92" y="35" class="h3" fill="#FFFFFF">1080p • MP4</text><text x="92" y="59" class="body2" style="fill:#C9CBD6">82 MB • about 42 sec</text><circle cx="323" cy="44" r="12" fill="#6558F5"/><circle cx="323" cy="44" r="5" fill="#FFFFFF"/></g>
+        <g transform="translate(20 290)"><rect width="353" height="76" rx="23" fill="#FFFFFF" stroke="#D8D4CE"/><rect x="14" y="12" width="52" height="52" rx="17" fill="#C6F6EE"/><text x="40" y="44" class="tiny center" fill="#171821">SAVE</text><text x="82" y="32" class="h3">Data saver • 480p</text><text x="82" y="55" class="body2">25 MB • about 13 sec</text><circle cx="323" cy="38" r="12" fill="none" stroke="#A7A39E" stroke-width="2"/></g>
+        <g transform="translate(20 378)"><rect width="353" height="76" rx="23" fill="#FFFFFF" stroke="#D8D4CE"/><rect x="14" y="12" width="52" height="52" rx="17" fill="#E9E5FF"/><text x="40" y="44" class="tiny center" fill="#171821">AUDIO</text><text x="82" y="32" class="h3">Audio only • 128 kbps</text><text x="82" y="55" class="body2">4.2 MB • about 3 sec</text><circle cx="323" cy="38" r="12" fill="none" stroke="#A7A39E" stroke-width="2"/></g>
+        <rect x="20" y="480" width="353" height="61" rx="22" fill="#6558F5"/><text x="176" y="518" class="button center" fill="#FFFFFF">Download best quality</text><circle cx="334" cy="510" r="18" fill="#FFFFFF"/><path d="M334 500v13m-5-4 5 5 5-5M328 519h12" fill="none" stroke="#6558F5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="196" y="566" class="small center">Saved to your private offline library</text>
+      </g>
+    </g>
+  </g>
+</svg>

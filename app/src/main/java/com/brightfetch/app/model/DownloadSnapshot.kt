@@ -14,6 +14,7 @@ data class DownloadSnapshot(
     val totalBytes: Long,
     val error: String? = null,
     val outputPath: String? = null,
+    val outputUri: String? = null,
 )
 
 data class DownloadedVideo(
