@@ -1,6 +1,6 @@
-# BrightFetch MVP
+# VidPull MVP
 
-BrightFetch is an Android video-downloader MVP built with Kotlin, Jetpack Compose, WebView, Kotlin Coroutines, and WorkManager.
+VidPull is an Android video-downloader MVP built with Kotlin, Jetpack Compose, WebView, Kotlin Coroutines, and WorkManager.
 
 ## Included
 
@@ -21,7 +21,7 @@ BrightFetch is an Android video-downloader MVP built with Kotlin, Jetpack Compos
 - HLS child playlists requested by WebView are collapsed into one detected video; the format resolver expands the master into real quality choices so a segment or duplicate playlist is not presented as a separate video.
 - Direct HTTP(S) video downloads with foreground notifications, progress, cancellation, and Range-based resume.
 - VOD HLS (`.m3u8`) downloads preserve the exact quality selected by the user, including standard AES-128 playlists with a publicly accessible key, and package MPEG-TS streams into a validated MP4 with Media3 Transformer.
-- Public MediaStore library at `Internal storage/Movies/BrightFetch`, with real cached thumbnails, quality, resolution, duration, extension, file size, `dd/MM/yyyy` download date, share, and delete actions.
+- Public MediaStore library at `Internal storage/Movies/VidPull`, with real cached thumbnails, quality, resolution, duration, extension, file size, `dd/MM/yyyy` download date, share, and delete actions.
 - Immersive in-app video preview with controls hidden initially, tap-to-show overlay, audio, seek bar, ±5-second seeking, mute, speed, rotation, control lock, and automatic control hiding.
 - Output names are normalized to supported video extensions; non-video suffixes such as `.bin` or `.dat` are replaced from the detected MIME type.
 

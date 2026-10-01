@@ -137,7 +137,7 @@ import kotlin.math.abs
 
 internal class BrowserTabState(val id: Long = nextBrowserTabId()) {
     var address by mutableStateOf("")
-    var pageTitle by mutableStateOf("BrightFetch")
+    var pageTitle by mutableStateOf("VidPull")
     var showLanding by mutableStateOf(true)
     var canGoBack by mutableStateOf(false)
     var canGoForward by mutableStateOf(false)
@@ -192,7 +192,7 @@ class BrowserState {
         currentTab.showLanding = true
         currentTab.pendingUrl = null
         currentTab.address = ""
-        currentTab.pageTitle = "BrightFetch"
+        currentTab.pageTitle = "VidPull"
         currentTab.progress = 0f
     }
 
@@ -839,7 +839,7 @@ private fun TabsPanel(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                if (tab.showLanding) "BrightFetch home" else tab.address,
+                                if (tab.showLanding) "VidPull home" else tab.address,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp,
                                 maxLines = 1,

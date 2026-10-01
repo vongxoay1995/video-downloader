@@ -21,7 +21,7 @@ import java.io.FileOutputStream
 import java.io.OutputStream
 
 object PublicVideoStore {
-    const val RELATIVE_DIRECTORY = "Movies/BrightFetch/"
+    const val RELATIVE_DIRECTORY = "Movies/VidPull/"
     private const val TAG = "BrightFetchDownload"
 
     data class PublishedVideo(
@@ -74,7 +74,7 @@ object PublicVideoStore {
         } else {
             @Suppress("DEPRECATION")
             val legacyPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
-                .resolve("BrightFetch").absolutePath + File.separator + "%"
+                .resolve("VidPull").absolutePath + File.separator + "%"
             selection = "${MediaStore.Video.Media.DATA} LIKE ?"
             args = arrayOf(legacyPath)
         }
@@ -172,7 +172,7 @@ object PublicVideoStore {
 
     suspend fun migrateLegacyFiles(context: Context) {
         val legacyFolder = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
-            ?.resolve("BrightFetch") ?: return
+            ?.resolve("VidPull") ?: return
         val existing = query(context).associateBy { it.name to it.size }
         legacyFolder.listFiles()
             ?.filter { it.isFile && !it.name.endsWith(".part") && VideoFileNames.hasSupportedExtension(it.name) }
@@ -242,9 +242,9 @@ object PublicVideoStore {
         mimeType: String,
     ): PublishedVideo {
         val folder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
-            .resolve("BrightFetch")
+            .resolve("VidPull")
         check((folder.exists() || folder.mkdirs()) && folder.isDirectory) {
-            "Cannot create public Movies/BrightFetch"
+            "Cannot create public Movies/VidPull"
         }
         val destination = uniqueFile(folder, requestedName)
         FileOutputStream(destination).use { output -> copyInterruptibly(source, output) }

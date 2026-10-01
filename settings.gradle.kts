@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "BrightFetch"
+rootProject.name = "VidPull"
 include(":app")

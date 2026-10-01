@@ -28,7 +28,7 @@ data class MediaCandidate(
             val readableTitle = title.takeIf {
                 it.isNotBlank() &&
                     !it.equals("Detected video", ignoreCase = true) &&
-                    !it.equals("BrightFetch", ignoreCase = true)
+                    !it.equals("VidPull", ignoreCase = true)
             }
             val raw = preferredFileName?.takeIf(String::isNotBlank)
                 ?: (if (isHls) readableTitle ?: pathName else pathName)

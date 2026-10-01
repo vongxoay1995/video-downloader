@@ -91,7 +91,7 @@ fun ModernSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             HorizontalDivider(color = Hairline)
             SettingsInfo(Icons.Default.Download, "Default quality", "Ask each time")
             HorizontalDivider(color = Hairline)
-            SettingsInfo(Icons.Default.FolderOpen, "Save location", "Movies / BrightFetch")
+            SettingsInfo(Icons.Default.FolderOpen, "Save location", "Movies / VidPull")
         }
         Spacer(Modifier.height(28.dp))
         SectionLabel("PLAYBACK")
@@ -134,7 +134,7 @@ fun ModernSettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
         Spacer(Modifier.height(20.dp))
-        Text("BrightFetch · Version ${BuildConfig.VERSION_NAME}", color = Muted, fontSize = 11.sp,
+        Text("VidPull · Version ${BuildConfig.VERSION_NAME}", color = Muted, fontSize = 11.sp,
             modifier = Modifier.align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(30.dp))
     }

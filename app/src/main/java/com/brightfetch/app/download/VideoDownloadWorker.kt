@@ -58,7 +58,7 @@ class VideoDownloadWorker(
         setForeground(createForegroundInfo(0, "Starting download…"))
 
         val folder = applicationContext.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
-            ?.resolve("BrightFetch/.partials")
+            ?.resolve("VidPull/.partials")
             ?: return@withContext failure("External storage is unavailable")
         if (!folder.exists() && !folder.mkdirs()) {
             return@withContext failure("Cannot create the video folder")
@@ -90,7 +90,7 @@ class VideoDownloadWorker(
                 downloadDirect(url, partFile)
             }
             if (!ok) return@withContext failure("Download was interrupted")
-            updateProgress(99, partFile.length(), partFile.length(), "Saving to Movies/BrightFetch…")
+            updateProgress(99, partFile.length(), partFile.length(), "Saving to Movies/VidPull…")
             val published = PublicVideoStore.publish(
                 context = applicationContext,
                 source = partFile,
@@ -102,7 +102,7 @@ class VideoDownloadWorker(
                 TAG,
                 "Download complete: sourceUrl=$url contentUri=${published.uri} publicPath=${published.displayPath}",
             )
-            updateProgress(100, published.size, published.size, "Saved to Movies/BrightFetch")
+            updateProgress(100, published.size, published.size, "Saved to Movies/VidPull")
             Result.success(
                 Data.Builder()
                     .putString(DownloadContract.KEY_OUTPUT_PATH, published.displayPath)
@@ -339,7 +339,7 @@ class VideoDownloadWorker(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = NotificationCompat.Builder(applicationContext, DownloadContract.CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_stat_download)
             .setContentTitle(requestedName.ifBlank { "Video download" })
             .setContentText(text)
             .setContentIntent(pendingIntent)

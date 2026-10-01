@@ -127,7 +127,7 @@ fun ModernHomeScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             BrandMark()
             Spacer(Modifier.width(10.dp))
-            Text("BrightFetch", color = Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("VidPull", color = Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
             IconButton(
                 onClick = onOpenSettings,

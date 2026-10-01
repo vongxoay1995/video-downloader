@@ -348,7 +348,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun candidateTitleScore(title: String): Int {
         val normalized = title.trim().lowercase()
         if (normalized.isBlank()) return 0
-        if (normalized in setOf("brightfetch", "detected video", "error response", "webpage not available")) {
+        if (normalized in setOf("vidpull", "detected video", "error response", "webpage not available")) {
             return 1
         }
         return 10 + title.length.coerceAtMost(100)
@@ -357,7 +357,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun resolvedTitle(pageTitle: String, pageUrl: String): String {
         val usefulPageTitle = pageTitle.takeIf {
             it.isNotBlank() &&
-                !it.equals("BrightFetch", ignoreCase = true) &&
+                !it.equals("VidPull", ignoreCase = true) &&
                 !it.equals("Detected video", ignoreCase = true)
         }
         if (usefulPageTitle != null) return usefulPageTitle
